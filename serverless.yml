@@ -1,0 +1,36 @@
+service: canaima-backend
+
+frameworkVersion: "^4"
+
+provider:
+  name: aws
+  runtime: nodejs24.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    NODE_ENV: ${self:provider.stage}
+  iam:
+    role:
+      statements: []
+
+plugins:
+  - serverless-offline
+
+build:
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    target: node24
+    platform: node
+
+package:
+  individually: true
+
+functions:
+  hello:
+    handler: src/functions/hello/handler.main
+    events:
+      - httpApi:
+          path: /hello
+          method: GET

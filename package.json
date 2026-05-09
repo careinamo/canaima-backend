@@ -1,0 +1,23 @@
+{
+  "name": "canaima-backend",
+  "version": "1.0.0",
+  "description": "Canaima backend - Serverless Framework with TypeScript",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy:prod": "serverless deploy --stage prod",
+    "offline": "serverless offline",
+    "build": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "serverless": "^4.0.0",
+    "serverless-offline": "^14.4.0",
+    "typescript": "^5.8.0"
+  }
+}
