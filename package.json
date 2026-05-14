@@ -11,7 +11,8 @@
     "deploy:prod": "serverless deploy --stage prod",
     "offline": "serverless offline",
     "build": "tsc --noEmit",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "seed:clients": "tsx src/seeds/clients.ts"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1045.0",
@@ -21,6 +22,7 @@
     "esbuild": "^0.25.0",
     "serverless": "^4.0.0",
     "serverless-offline": "^14.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.0"
   },
   "dependencies": {
