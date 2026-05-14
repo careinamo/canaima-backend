@@ -1,6 +1,7 @@
 service: canaima-backend
 
 frameworkVersion: "^4"
+useDotenv: true
 
 provider:
   name: aws
@@ -9,9 +10,21 @@ provider:
   stage: ${opt:stage, 'dev'}
   environment:
     NODE_ENV: ${self:provider.stage}
+    TABLE_CLIENTS: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
   iam:
     role:
-      statements: []
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Scan
+            - dynamodb:Query
+          Resource:
+            - !GetAtt ClientsTable.Arn
+            - !Sub "${ClientsTable.Arn}/index/*"
 
 plugins:
   - serverless-offline
@@ -34,3 +47,61 @@ functions:
       - httpApi:
           path: /hello
           method: GET
+
+  listClients:
+    handler: src/functions/clients/handler.listClients
+    events:
+      - httpApi:
+          path: /clients
+          method: GET
+
+  getClient:
+    handler: src/functions/clients/handler.getClient
+    events:
+      - httpApi:
+          path: /clients/{id}
+          method: GET
+
+  createClient:
+    handler: src/functions/clients/handler.createClient
+    events:
+      - httpApi:
+          path: /clients
+          method: POST
+
+  updateClient:
+    handler: src/functions/clients/handler.updateClient
+    events:
+      - httpApi:
+          path: /clients/{id}
+          method: PUT
+
+  deleteClient:
+    handler: src/functions/clients/handler.deleteClient
+    events:
+      - httpApi:
+          path: /clients/{id}
+          method: DELETE
+
+resources:
+  Resources:
+    ClientsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: emailLower
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: emailIndex
+            KeySchema:
+              - AttributeName: emailLower
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
