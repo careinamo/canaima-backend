@@ -5,7 +5,6 @@ import {
   PutCommand,
   UpdateCommand,
   DeleteCommand,
-  ScanCommand,
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { Client, ClientRecord, CreateClientInput, UpdateClientInput, ListClientsParams } from './types';
@@ -18,10 +17,10 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
 });
 
 /**
- * Strip internal DynamoDB fields (nameLower, emailLower) before returning to callers.
+ * Strip internal DynamoDB fields (PK, SK, nameLower, emailLower) before returning to callers.
  */
 function toClient(record: Record<string, unknown>): Client {
-  const { nameLower: _nl, emailLower: _el, ...rest } = record as unknown as ClientRecord;
+  const { PK: _pk, SK: _sk, nameLower: _nl, emailLower: _el, ...rest } = record as unknown as ClientRecord;
   return rest as Client;
 }
 
@@ -39,17 +38,25 @@ export async function findClientByEmail(email: string): Promise<Client | null> {
   return item ? toClient(item) : null;
 }
 
-export async function getClientById(id: string): Promise<Client | null> {
-  const result = await ddb.send(new GetCommand({ TableName: TABLE, Key: { id } }));
+export async function getClientById(orgId: string, clientId: string): Promise<Client | null> {
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: TABLE,
+      Key: { PK: `org#${orgId}`, SK: `client#${clientId}` },
+    }),
+  );
   return result.Item ? toClient(result.Item) : null;
 }
 
 export async function listClients(
   params: ListClientsParams,
 ): Promise<{ items: Client[]; total: number }> {
-  const filterParts: string[] = [];
-  const exprValues: Record<string, unknown> = {};
+  const pk = `org#${params.orgId}`;
+
+  const keyCondition = 'PK = :pk AND begins_with(SK, :skPrefix)';
+  const exprValues: Record<string, unknown> = { ':pk': pk, ':skPrefix': 'client#' };
   const exprNames: Record<string, string> = {};
+  const filterParts: string[] = [];
 
   if (params.status) {
     filterParts.push('#status = :status');
@@ -62,20 +69,20 @@ export async function listClients(
     exprValues[':search'] = params.search.toLowerCase();
   }
 
-  const scanInput = {
+  const queryInput = {
     TableName: TABLE,
+    KeyConditionExpression: keyCondition,
+    ExpressionAttributeValues: exprValues,
     ...(filterParts.length > 0 && { FilterExpression: filterParts.join(' AND ') }),
-    ...(Object.keys(exprValues).length > 0 && { ExpressionAttributeValues: exprValues }),
     ...(Object.keys(exprNames).length > 0 && { ExpressionAttributeNames: exprNames }),
   };
 
-  // Paginate through all DynamoDB pages to get the full matching set, then slice in-memory.
-  // Acceptable for a B2B clients dataset (typically hundreds to low thousands of records).
+  // Query all pages for this org's clients, then sort/paginate in-memory.
   const allItems: Client[] = [];
   let lastKey: Record<string, unknown> | undefined;
 
   do {
-    const result = await ddb.send(new ScanCommand({ ...scanInput, ExclusiveStartKey: lastKey }));
+    const result = await ddb.send(new QueryCommand({ ...queryInput, ExclusiveStartKey: lastKey }));
     for (const item of result.Items ?? []) {
       allItems.push(toClient(item));
     }
@@ -94,10 +101,15 @@ export async function listClients(
   return { items: allItems.slice(start, start + params.limit), total };
 }
 
-export async function createClient(input: CreateClientInput): Promise<Client> {
+export async function createClient(orgId: string, input: CreateClientInput): Promise<Client> {
   const now = new Date().toISOString();
+  const clientId = crypto.randomUUID();
+
   const record: ClientRecord = {
-    id: crypto.randomUUID(),
+    PK: `org#${orgId}`,
+    SK: `client#${clientId}`,
+    id: clientId,
+    orgId,
     name: input.name,
     nameLower: input.name.toLowerCase(),
     email: input.email,
@@ -116,8 +128,9 @@ export async function createClient(input: CreateClientInput): Promise<Client> {
   return toClient(record as unknown as Record<string, unknown>);
 }
 
-export async function updateClient(id: string, input: UpdateClientInput): Promise<Client | null> {
-  // Prefix all field names with # to avoid DynamoDB reserved word conflicts
+export async function updateClient(orgId: string, clientId: string, input: UpdateClientInput): Promise<Client | null> {
+  const key = { PK: `org#${orgId}`, SK: `client#${clientId}` };
+
   const sets: string[] = ['#updatedAt = :updatedAt'];
   const removes: string[] = [];
   const values: Record<string, unknown> = { ':updatedAt': new Date().toISOString() };
@@ -148,7 +161,6 @@ export async function updateClient(id: string, input: UpdateClientInput): Promis
     values[':creditLimit'] = input.creditLimit;
   }
 
-  // Optional nullable fields — if present but undefined → REMOVE, if present with value → SET
   for (const field of ['phone', 'address', 'notes'] as const) {
     if (field in input) {
       if (input[field] !== undefined) {
@@ -169,11 +181,11 @@ export async function updateClient(id: string, input: UpdateClientInput): Promis
     const result = await ddb.send(
       new UpdateCommand({
         TableName: TABLE,
-        Key: { id },
+        Key: key,
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: values,
         ExpressionAttributeNames: names,
-        ConditionExpression: 'attribute_exists(id)',
+        ConditionExpression: 'attribute_exists(PK)',
         ReturnValues: 'ALL_NEW',
       }),
     );
@@ -184,13 +196,13 @@ export async function updateClient(id: string, input: UpdateClientInput): Promis
   }
 }
 
-export async function deleteClient(id: string): Promise<boolean> {
+export async function deleteClient(orgId: string, clientId: string): Promise<boolean> {
   try {
     await ddb.send(
       new DeleteCommand({
         TableName: TABLE,
-        Key: { id },
-        ConditionExpression: 'attribute_exists(id)',
+        Key: { PK: `org#${orgId}`, SK: `client#${clientId}` },
+        ConditionExpression: 'attribute_exists(PK)',
       }),
     );
     return true;

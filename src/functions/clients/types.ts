@@ -2,6 +2,7 @@ export type ClientStatus = 'active' | 'inactive' | 'overdue';
 
 export interface Client {
   id: string;
+  orgId: string;
   name: string;
   email: string;
   phone?: string;
@@ -15,8 +16,10 @@ export interface Client {
   updatedAt: string;
 }
 
-/** Internal DynamoDB record — includes lowercase fields for case-insensitive search */
+/** Internal DynamoDB record — includes PK/SK and lowercase fields */
 export interface ClientRecord extends Client {
+  PK: string;   // org#<orgId>
+  SK: string;    // client#<clientId>
   nameLower: string;
   emailLower: string;
 }
@@ -42,6 +45,7 @@ export interface UpdateClientInput {
 }
 
 export interface ListClientsParams {
+  orgId: string;
   search?: string;
   status?: ClientStatus;
   page: number;

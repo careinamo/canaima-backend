@@ -52,35 +52,35 @@ functions:
     handler: src/functions/clients/handler.listClients
     events:
       - httpApi:
-          path: /clients
+          path: /orgs/{orgId}/clients
           method: GET
 
   getClient:
     handler: src/functions/clients/handler.getClient
     events:
       - httpApi:
-          path: /clients/{id}
+          path: /orgs/{orgId}/clients/{id}
           method: GET
 
   createClient:
     handler: src/functions/clients/handler.createClient
     events:
       - httpApi:
-          path: /clients
+          path: /orgs/{orgId}/clients
           method: POST
 
   updateClient:
     handler: src/functions/clients/handler.updateClient
     events:
       - httpApi:
-          path: /clients/{id}
+          path: /orgs/{orgId}/clients/{id}
           method: PUT
 
   deleteClient:
     handler: src/functions/clients/handler.deleteClient
     events:
       - httpApi:
-          path: /clients/{id}
+          path: /orgs/{orgId}/clients/{id}
           method: DELETE
 
 resources:
@@ -91,13 +91,17 @@ resources:
         TableName: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: id
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
             AttributeType: S
           - AttributeName: emailLower
             AttributeType: S
         KeySchema:
-          - AttributeName: id
+          - AttributeName: PK
             KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
         GlobalSecondaryIndexes:
           - IndexName: emailIndex
             KeySchema:

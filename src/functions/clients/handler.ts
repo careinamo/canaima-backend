@@ -19,17 +19,19 @@ const clientError = (statusCode: number, message: string) =>
 const serverError = () => respond(500, { error: 'Internal server error' });
 
 // ---------------------------------------------------------------------------
-// GET /clients
+// GET /orgs/{orgId}/clients
 // ---------------------------------------------------------------------------
 
 export const listClients = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   try {
+    const orgId = event.pathParameters?.orgId;
+    if (!orgId) return clientError(400, 'Missing orgId');
+
     const q = event.queryStringParameters ?? {};
 
     const page = Math.max(1, parseInt(q.page ?? '1', 10) || 1);
-    // Allow a high limit (e.g. 500) so the frontend can request all rows for CSV export
     const limit = Math.min(500, Math.max(1, parseInt(q.limit ?? '20', 10) || 20));
     const sortBy = q.sortBy ?? 'createdAt';
     const sortOrder: 'asc' | 'desc' = q.sortOrder === 'desc' ? 'desc' : 'asc';
@@ -41,6 +43,7 @@ export const listClients = async (
     }
 
     const { items, total } = await repo.listClients({
+      orgId,
       search: q.search,
       status,
       page,
@@ -64,17 +67,19 @@ export const listClients = async (
 };
 
 // ---------------------------------------------------------------------------
-// GET /clients/{id}
+// GET /orgs/{orgId}/clients/{id}
 // ---------------------------------------------------------------------------
 
 export const getClient = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   try {
+    const orgId = event.pathParameters?.orgId;
     const id = event.pathParameters?.id;
+    if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing client id');
 
-    const client = await repo.getClientById(id);
+    const client = await repo.getClientById(orgId, id);
     if (!client) return clientError(404, 'Client not found');
 
     return respond(200, client);
@@ -84,13 +89,16 @@ export const getClient = async (
 };
 
 // ---------------------------------------------------------------------------
-// POST /clients
+// POST /orgs/{orgId}/clients
 // ---------------------------------------------------------------------------
 
 export const createClient = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   try {
+    const orgId = event.pathParameters?.orgId;
+    if (!orgId) return clientError(400, 'Missing orgId');
+
     let body: unknown;
     try {
       body = JSON.parse(event.body ?? '{}');
@@ -103,7 +111,7 @@ export const createClient = async (
     const existing = await repo.findClientByEmail(input.email);
     if (existing) return clientError(409, 'A client with this email already exists');
 
-    const client = await repo.createClient(input);
+    const client = await repo.createClient(orgId, input);
     return respond(201, client);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -112,14 +120,16 @@ export const createClient = async (
 };
 
 // ---------------------------------------------------------------------------
-// PUT /clients/{id}
+// PUT /orgs/{orgId}/clients/{id}
 // ---------------------------------------------------------------------------
 
 export const updateClient = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   try {
+    const orgId = event.pathParameters?.orgId;
     const id = event.pathParameters?.id;
+    if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing client id');
 
     let body: unknown;
@@ -138,7 +148,7 @@ export const updateClient = async (
       }
     }
 
-    const client = await repo.updateClient(id, input);
+    const client = await repo.updateClient(orgId, id, input);
     if (!client) return clientError(404, 'Client not found');
 
     return respond(200, client);
@@ -149,17 +159,19 @@ export const updateClient = async (
 };
 
 // ---------------------------------------------------------------------------
-// DELETE /clients/{id}
+// DELETE /orgs/{orgId}/clients/{id}
 // ---------------------------------------------------------------------------
 
 export const deleteClient = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> => {
   try {
+    const orgId = event.pathParameters?.orgId;
     const id = event.pathParameters?.id;
+    if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing client id');
 
-    const deleted = await repo.deleteClient(id);
+    const deleted = await repo.deleteClient(orgId, id);
     if (!deleted) return clientError(404, 'Client not found');
 
     return respond(200, { success: true, message: 'Client deleted' });

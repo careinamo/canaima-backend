@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 
 const TABLE = process.env.TABLE_CLIENTS || 'clientsaaa-dev';
 const REGION = process.env.AWS_REGION || 'us-east-2';
+const ORG_ID = process.env.SEED_ORG_ID || 'org-default';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }), {
   marshallOptions: { removeUndefinedValues: true },
@@ -12,6 +13,9 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }), 
 const seedClients = [
   {
     id: '550e8400-e29b-41d4-a716-446655440001',
+    orgId: ORG_ID,
+    PK: `org#${ORG_ID}`,
+    SK: 'client#550e8400-e29b-41d4-a716-446655440001',
     name: 'Acme Corporation',
     email: 'contact@acme.com',
     nameLower: 'acme corporation',
@@ -27,6 +31,9 @@ const seedClients = [
   },
   {
     id: '550e8400-e29b-41d4-a716-446655440002',
+    orgId: ORG_ID,
+    PK: `org#${ORG_ID}`,
+    SK: 'client#550e8400-e29b-41d4-a716-446655440002',
     name: 'TechStart Industries',
     email: 'billing@techstart.io',
     nameLower: 'techstart industries',
@@ -43,6 +50,9 @@ const seedClients = [
   },
   {
     id: '550e8400-e29b-41d4-a716-446655440003',
+    orgId: ORG_ID,
+    PK: `org#${ORG_ID}`,
+    SK: 'client#550e8400-e29b-41d4-a716-446655440003',
     name: 'Global Manufacturing LLC',
     email: 'procurement@globalmfg.com',
     nameLower: 'global manufacturing llc',
@@ -59,6 +69,9 @@ const seedClients = [
   },
   {
     id: '550e8400-e29b-41d4-a716-446655440004',
+    orgId: ORG_ID,
+    PK: `org#${ORG_ID}`,
+    SK: 'client#550e8400-e29b-41d4-a716-446655440004',
     name: 'Regional Retail Partners',
     email: 'accounts@retailpartners.com',
     nameLower: 'regional retail partners',
@@ -74,6 +87,9 @@ const seedClients = [
   },
   {
     id: '550e8400-e29b-41d4-a716-446655440005',
+    orgId: ORG_ID,
+    PK: `org#${ORG_ID}`,
+    SK: 'client#550e8400-e29b-41d4-a716-446655440005',
     name: 'Enterprise Solutions Group',
     email: 'finance@entersolutions.net',
     nameLower: 'enterprise solutions group',
