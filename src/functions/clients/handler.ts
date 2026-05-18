@@ -9,7 +9,12 @@ import type { ClientStatus } from './types';
 
 const respond = (statusCode: number, body: unknown): APIGatewayProxyResultV2 => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  },
   body: JSON.stringify(body),
 });
 
@@ -17,6 +22,9 @@ const clientError = (statusCode: number, message: string) =>
   respond(statusCode, { error: message });
 
 const serverError = () => respond(500, { error: 'Internal server error' });
+
+console.log('TABLE_CLIENTS env var:', process.env.TABLE_CLIENTS);
+console.log('REGION env var:', process.env.AWS_REGION);
 
 // ---------------------------------------------------------------------------
 // GET /orgs/{orgId}/clients
@@ -61,7 +69,8 @@ export const listClients = async (
         totalCount: total,
       },
     });
-  } catch {
+  } catch (error) {
+    console.error('listClients error:', error);
     return serverError();
   }
 };
@@ -83,7 +92,8 @@ export const getClient = async (
     if (!client) return clientError(404, 'Client not found');
 
     return respond(200, client);
-  } catch {
+  } catch (error) {
+    console.error('getClient error:', error);
     return serverError();
   }
 };
@@ -175,7 +185,8 @@ export const deleteClient = async (
     if (!deleted) return clientError(404, 'Client not found');
 
     return respond(200, { success: true, message: 'Client deleted' });
-  } catch {
+  } catch (error) {
+    console.error('deleteClient error:', error);
     return serverError();
   }
 };

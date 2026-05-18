@@ -6,11 +6,21 @@ useDotenv: true
 provider:
   name: aws
   runtime: nodejs24.x
-  region: us-east-1
+  region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   environment:
     NODE_ENV: ${self:provider.stage}
     TABLE_CLIENTS: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
+  httpApi:
+    cors:
+      allowedOrigins:
+        - '*'
+      allowedHeaders:
+        - '*'
+      allowedMethods:
+        - '*'
+      exposedHeaders:
+        - '*'
   iam:
     role:
       statements:
@@ -47,6 +57,7 @@ functions:
       - httpApi:
           path: /hello
           method: GET
+          cors: true
 
   listClients:
     handler: src/functions/clients/handler.listClients
@@ -54,6 +65,7 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: GET
+          cors: true
 
   getClient:
     handler: src/functions/clients/handler.getClient
@@ -61,6 +73,7 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: GET
+          cors: true
 
   createClient:
     handler: src/functions/clients/handler.createClient
@@ -68,6 +81,7 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: POST
+          cors: true
 
   updateClient:
     handler: src/functions/clients/handler.updateClient
@@ -75,6 +89,7 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: PUT
+          cors: true
 
   deleteClient:
     handler: src/functions/clients/handler.deleteClient
@@ -82,6 +97,7 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: DELETE
+          cors: true
 
 resources:
   Resources:

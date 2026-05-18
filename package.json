@@ -9,6 +9,7 @@
     "dev": "serverless offline --stage dev",
     "deploy": "serverless deploy",
     "deploy:prod": "serverless deploy --stage prod",
+    "deploy:dev:oregon": "serverless deploy --stage dev --region us-west-2",
     "offline": "serverless offline",
     "build": "tsc --noEmit",
     "lint": "eslint src --ext .ts",

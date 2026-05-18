@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 
-const TABLE = process.env.TABLE_CLIENTS || 'clientsaaa-dev';
+const TABLE = 'clientsaaa-dev';
 const REGION = process.env.AWS_REGION || 'us-east-2';
 const ORG_ID = process.env.SEED_ORG_ID || 'org-default';
 

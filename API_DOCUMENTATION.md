@@ -85,7 +85,7 @@ Retrieve a paginated list of all clients for a given organization.
 **Example Request:**
 
 ```bash
-GET /orgs/org-default/clients?page=1&limit=20&search=acme&status=active&sortBy=name&sortOrder=asc
+curl http://localhost:3000/orgs/org-default/clients?page=1\&limit=20\&search=acme\&status=active\&sortBy=name\&sortOrder=asc
 ```
 
 **Response (200 OK):**
@@ -134,7 +134,7 @@ Retrieve a specific client by ID within an organization.
 **Example Request:**
 
 ```bash
-GET /orgs/org-default/clients/550e8400-e29b-41d4-a716-446655440001
+curl http://localhost:3000/orgs/org-default/clients/550e8400-e29b-41d4-a716-446655440001
 ```
 
 **Response (200 OK):**
@@ -181,8 +181,8 @@ Create a new client account within an organization.
 | `email` | string | ✓ | Client email (must be unique) |
 | `phone` | string | - | Phone number |
 | `address` | string | - | Physical address |
-| `status` | string | ✓ | Status: `active`, `inactive`, or `overdue` |
-| `creditLimit` | number | ✓ | Credit limit amount (≥ 0) |
+| `status` | string | - | Status: `active`, `inactive`, or `overdue` (default: `active`) |
+| `creditLimit` | number | - | Credit limit amount (≥ 0, default: `0`) |
 | `notes` | string | - | Internal notes |
 
 **Example Request:**

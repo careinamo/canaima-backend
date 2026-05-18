@@ -12,6 +12,12 @@ import type { Client, ClientRecord, CreateClientInput, UpdateClientInput, ListCl
 const TABLE = process.env.TABLE_CLIENTS as string;
 const EMAIL_INDEX = 'emailIndex';
 
+console.log('Repository initialized. TABLE_CLIENTS:', TABLE);
+
+if (!TABLE) {
+  console.error('ERROR: TABLE_CLIENTS environment variable is not set!');
+}
+
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
