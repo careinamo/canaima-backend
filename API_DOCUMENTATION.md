@@ -15,13 +15,19 @@ Canaima Backend is a B2B credit and accounts-receivable serverless application b
 src/
 ├── functions/
 │   ├── hello/              # Example function
-│   └── clients/            # Clients module
+│   ├── clients/            # Clients module
+│   │   ├── handler.ts      # Route handlers (5 endpoints)
+│   │   ├── repository.ts   # DynamoDB operations
+│   │   ├── validators.ts   # Input validation
+│   │   └── types.ts        # TypeScript interfaces
+│   └── credit-notes/       # Credit Notes module
 │       ├── handler.ts      # Route handlers (5 endpoints)
 │       ├── repository.ts   # DynamoDB operations
 │       ├── validators.ts   # Input validation
 │       └── types.ts        # TypeScript interfaces
 └── seeds/
-    └── clients.ts          # Database seed data
+    ├── clients.ts          # Database seed data for clients
+    └── credit-notes.ts     # Database seed data for credit notes
 ```
 
 ## Configuration
@@ -32,12 +38,14 @@ Create a `.env` file in the project root:
 
 ```env
 TABLE_CLIENTS_BASE=clientsaaa
+TABLE_CREDIT_NOTES_BASE=credit-notes
 AWS_REGION=us-east-2
 SEED_ORG_ID=org-default
 ```
 
 **Variables:**
 - `TABLE_CLIENTS_BASE`: Base name for the clients table (stage is appended: `clientsaaa-dev`, `clientsaaa-prod`)
+- `TABLE_CREDIT_NOTES_BASE`: Base name for the credit notes table (stage is appended: `credit-notes-dev`, `credit-notes-prod`)
 - `AWS_REGION`: AWS region for DynamoDB connection
 - `SEED_ORG_ID`: Organization ID used by the seed script
 
@@ -320,6 +328,283 @@ curl -X DELETE http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372
 
 ---
 
+## Credit Notes API Endpoints
+
+### Overview
+
+The Credit Notes module provides REST API endpoints for managing B2B credit notes (adjustments, allowances, and credits) for invoices. All endpoints are namespaced under `/orgs/{orgId}/credit-notes` and scoped by organization.
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|-------------|
+| **GET** | `/orgs/{orgId}/credit-notes` | `listCreditNotes` | List all credit notes for an organization | 200 |
+| **GET** | `/orgs/{orgId}/credit-notes/{id}` | `getCreditNote` | Retrieve a single credit note by ID | 200, 404 |
+| **POST** | `/orgs/{orgId}/credit-notes` | `createCreditNote` | Create a new credit note | 201, 400 |
+| **PUT** | `/orgs/{orgId}/credit-notes/{id}` | `updateCreditNote` | Update an existing credit note | 200, 400, 404 |
+| **DELETE** | `/orgs/{orgId}/credit-notes/{id}` | `deleteCreditNote` | Delete a credit note | 200, 404 |
+
+---
+
+## Credit Notes Endpoint Details
+
+### 1. GET /orgs/{orgId}/credit-notes — List Credit Notes
+
+Retrieve a paginated list of all credit notes for a given organization.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | number | 1 | Page number (starts at 1) |
+| `limit` | number | 20 | Records per page (max: 500) |
+| `search` | string | - | Search term (matches number, client name, or invoice number, case-insensitive) |
+| `status` | string | - | Filter by status: `pending`, `partial`, or `paid` |
+| `sortBy` | string | `createdAt` | Field to sort by |
+| `sortOrder` | string | `asc` | Sort direction: `asc` or `desc` |
+
+**Example Request:**
+
+```bash
+curl http://localhost:3000/orgs/org-default/credit-notes?page=1\&limit=20\&search=NC-001\&status=pending\&sortBy=amount\&sortOrder=desc
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655550001",
+      "number": "NC-001",
+      "orgId": "org-default",
+      "clientId": "550e8400-e29b-41d4-a716-446655440001",
+      "clientName": "Acme Corporation",
+      "invoiceNumber": "INV-2024-001",
+      "amount": 5000,
+      "status": "pending",
+      "dueDate": "2025-06-12T00:00:00.000Z",
+      "description": "Credit for returned goods",
+      "createdAt": "2025-05-03T00:00:00.000Z",
+      "updatedAt": "2025-05-13T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalPages": 1,
+    "totalCount": 1
+  }
+}
+```
+
+---
+
+### 2. GET /orgs/{orgId}/credit-notes/{id} — Get Single Credit Note
+
+Retrieve a specific credit note by ID within an organization.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+| `id` | string | Credit Note UUID |
+
+**Example Request:**
+
+```bash
+curl http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716-446655550001
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "660e8400-e29b-41d4-a716-446655550001",
+  "number": "NC-001",
+  "orgId": "org-default",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "clientName": "Acme Corporation",
+  "invoiceNumber": "INV-2024-001",
+  "amount": 5000,
+  "status": "pending",
+  "dueDate": "2025-06-12T00:00:00.000Z",
+  "description": "Credit for returned goods",
+  "createdAt": "2025-05-03T00:00:00.000Z",
+  "updatedAt": "2025-05-13T00:00:00.000Z"
+}
+```
+
+**Error Responses:**
+
+- **404 Not Found**: Credit note with the given ID does not exist
+
+---
+
+### 3. POST /orgs/{orgId}/credit-notes — Create Credit Note
+
+Create a new credit note for a client within an organization.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `number` | string | - | Credit note number (auto-generated as NC-001, NC-002, etc. if not provided) |
+| `clientId` | string | ✓ | Client UUID |
+| `clientName` | string | ✓ | Client's display name (denormalized) |
+| `invoiceNumber` | string | ✓ | Related invoice number |
+| `amount` | number | ✓ | Credit amount (must be positive) |
+| `status` | string | - | Status: `pending`, `partial`, or `paid` (default: `pending`) |
+| `dueDate` | string | ✓ | Due date in ISO 8601 format |
+| `description` | string | - | Reason or description of the credit |
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3000/orgs/org-default/credit-notes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "550e8400-e29b-41d4-a716-446655440001",
+    "clientName": "Acme Corporation",
+    "invoiceNumber": "INV-2024-001",
+    "amount": 5000,
+    "status": "pending",
+    "dueDate": "2025-06-12T00:00:00Z",
+    "description": "Credit for returned goods"
+  }'
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": "660e8400-e29b-41d4-a716-446655550001",
+  "number": "NC-001",
+  "orgId": "org-default",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "clientName": "Acme Corporation",
+  "invoiceNumber": "INV-2024-001",
+  "amount": 5000,
+  "status": "pending",
+  "dueDate": "2025-06-12T00:00:00.000Z",
+  "description": "Credit for returned goods",
+  "createdAt": "2025-05-13T14:30:00.000Z",
+  "updatedAt": "2025-05-13T14:30:00.000Z"
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Validation failed (missing required field, invalid date format, non-positive amount, etc.)
+
+---
+
+### 4. PUT /orgs/{orgId}/credit-notes/{id} — Update Credit Note
+
+Update one or more fields of an existing credit note.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+| `id` | string | Credit Note UUID |
+
+**Request Body:** (all fields optional)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `number` | string | Credit note number |
+| `clientId` | string | Client UUID |
+| `clientName` | string | Client's display name |
+| `invoiceNumber` | string | Related invoice number |
+| `amount` | number | Credit amount (must be positive) |
+| `status` | string | Status: `pending`, `partial`, or `paid` |
+| `dueDate` | string | Due date in ISO 8601 format |
+| `description` | string | Reason or description |
+
+**Example Request:**
+
+```bash
+curl -X PUT http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716-446655550001 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "partial",
+    "amount": 2500
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "660e8400-e29b-41d4-a716-446655550001",
+  "number": "NC-001",
+  "orgId": "org-default",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "clientName": "Acme Corporation",
+  "invoiceNumber": "INV-2024-001",
+  "amount": 2500,
+  "status": "partial",
+  "dueDate": "2025-06-12T00:00:00.000Z",
+  "description": "Credit for returned goods",
+  "createdAt": "2025-05-13T14:30:00.000Z",
+  "updatedAt": "2025-05-13T14:35:00.000Z"
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Validation failed
+- **404 Not Found**: Credit note with the given ID does not exist
+
+---
+
+### 5. DELETE /orgs/{orgId}/credit-notes/{id} — Delete Credit Note
+
+Delete a credit note.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+| `id` | string | Credit Note UUID |
+
+**Example Request:**
+
+```bash
+curl -X DELETE http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716-446655550001
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "Credit note deleted"
+}
+```
+
+**Error Responses:**
+
+- **404 Not Found**: Credit note with the given ID does not exist
+
+---
+
 ## DynamoDB Table Schema
 
 ### Overview
@@ -415,6 +700,100 @@ This index enables fast lookups to verify email uniqueness during client creatio
 
 ---
 
+## Credit Notes DynamoDB Table Schema
+
+### Overview
+
+The Credit Notes table follows the same single-table design pattern as the Clients table, enabling efficient multi-tenant operations.
+
+- **Table Name**: `{TABLE_CREDIT_NOTES_BASE}-{stage}` (e.g., `credit-notes-dev`)
+- **Billing Mode**: PAY_PER_REQUEST (on-demand)
+- **Partition Key**: `PK` (String) — Format: `org#<orgId>`
+- **Sort Key**: `SK` (String) — Format: `creditnote#<noteId>`
+
+### Key Structure
+
+| Entity | PK | SK | Example |
+|--------|----|----|----------|
+| Credit Note | `org#<orgId>` | `creditnote#<noteId>` | PK=`org#org-default`, SK=`creditnote#660e8400...` |
+| Counter | `org#<orgId>` | `counter#creditnotes` | PK=`org#org-default`, SK=`counter#creditnotes` |
+
+### Attributes
+
+| Attribute | Type | Description | Notes |
+|-----------|------|-------------|-------|
+| `PK` | String | Partition key: `org#<orgId>` | Primary Key (HASH) |
+| `SK` | String | Sort key: `creditnote#<noteId>` | Primary Key (RANGE) |
+| `id` | String | Credit Note UUID | Business identifier |
+| `orgId` | String | Organization ID | Business identifier |
+| `number` | String | Credit note number (NC-001, NC-002, etc.) | Auto-generated if not provided |
+| `numberLower` | String | Lowercase number for case-insensitive search | Internal use |
+| `clientId` | String | Associated client UUID | Reference to Clients table |
+| `clientIdGSI` | String | Copy of clientId for GSI queries | For status filtering |
+| `clientName` | String | Client's display name (denormalized) | For list display |
+| `invoiceNumber` | String | Related invoice number | Reference to invoice |
+| `amount` | Number | Credit amount | Must be positive |
+| `status` | String | Status: `pending`, `partial`, or `paid` | - |
+| `statusGSI` | String | Copy of status for GSI queries | For status-based filtering |
+| `dueDate` | String | ISO 8601 timestamp | Payment/application due date |
+| `description` | String | Reason or notes for the credit | Optional |
+| `createdAt` | String | ISO 8601 timestamp of creation | Auto-generated |
+| `updatedAt` | String | ISO 8601 timestamp of last update | Auto-updated |
+
+### Global Secondary Indexes (GSI)
+
+**Index Name:** `statusIndex`
+
+| Attribute | Type | Purpose |
+|-----------|------|----------|
+| `statusGSI` | String | Partition Key for filtering credit notes by status |
+
+**Index Name:** `clientIdIndex`
+
+| Attribute | Type | Purpose |
+|-----------|------|----------|
+| `clientIdGSI` | String | Partition Key for filtering credit notes by client |
+
+### Storage Format
+
+**Example DynamoDB Record:**
+
+```json
+{
+  "PK": "org#org-default",
+  "SK": "creditnote#660e8400-e29b-41d4-a716-446655550001",
+  "id": "660e8400-e29b-41d4-a716-446655550001",
+  "orgId": "org-default",
+  "number": "NC-001",
+  "numberLower": "nc-001",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "clientIdGSI": "550e8400-e29b-41d4-a716-446655440001",
+  "clientName": "Acme Corporation",
+  "invoiceNumber": "INV-2024-001",
+  "amount": 5000,
+  "status": "pending",
+  "statusGSI": "pending",
+  "dueDate": "2025-06-12T00:00:00.000Z",
+  "description": "Credit for returned goods",
+  "createdAt": "2025-05-03T00:00:00.000Z",
+  "updatedAt": "2025-05-13T00:00:00.000Z"
+}
+```
+
+### Counter Record
+
+For sequential note number generation:
+
+```json
+{
+  "PK": "org#org-default",
+  "SK": "counter#creditnotes",
+  "counter": 6
+}
+```
+
+---
+
 ## Development
 
 ### Local Development
@@ -429,13 +808,24 @@ The API will be available at `http://localhost:3000` with Lambda invocation endp
 
 ### Seed Database
 
-Populate DynamoDB with sample client data:
+Populate DynamoDB with sample data:
 
+**Seed clients only:**
 ```bash
 npm run seed:clients
 ```
 
-This command uses the table name, region, and organization ID from `.env`. Set `SEED_ORG_ID` to target a specific organization.
+**Seed credit notes only:**
+```bash
+npm run seed:credit-notes
+```
+
+**Seed both (clients and credit notes):**
+```bash
+npm run seed
+```
+
+These commands use the table names, region, and organization ID from `.env`. Set `SEED_ORG_ID` to target a specific organization.
 
 ### Build & Validate
 
@@ -517,3 +907,26 @@ All endpoints return standardized JSON error responses:
 - **Status Filter** (`?status=active`): Exact match on status field
 - **Pagination**: Safe defaults (page=1, limit=20, max limit=500)
 - **Sorting**: Available on any Client field (default: `createdAt` ascending)
+
+---
+
+## Credit Notes Data Validation
+
+### Credit Note Creation & Update Rules
+
+- **number**: Optional string; auto-generated as NC-XXX if not provided
+- **clientId**: Required, must be a valid UUID referencing an existing Client
+- **clientName**: Required, non-empty string (denormalized from Client for display)
+- **invoiceNumber**: Required, non-empty string
+- **amount**: Required, positive number (> 0)
+- **status**: Optional, one of: `pending`, `partial`, `paid` (default: `pending`)
+- **dueDate**: Required, valid ISO 8601 date string
+- **description**: Optional string
+
+### Search & Filtering
+
+- **Search** (`?search=term`): Case-insensitive match against `number`, `clientName`, and `invoiceNumber`
+- **Status Filter** (`?status=pending`): Exact match on status field (pending, partial, paid)
+- **Pagination**: Safe defaults (page=1, limit=20, max limit=500)
+- **Sorting**: Available on any CreditNote field (default: `createdAt` ascending)
+- **Sequential Numbers**: Credit note numbers are auto-generated in sequence (NC-001, NC-002, etc.) using an atomic counter in DynamoDB

@@ -1,0 +1,374 @@
+{
+  "info": {
+    "_postman_id": "canaima-backend-api",
+    "name": "Canaima Backend API",
+    "description": "B2B credit and accounts-receivable serverless application API collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Clients",
+      "description": "Client management endpoints",
+      "item": [
+        {
+          "name": "List Clients",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients?page=1&limit=20&search=&status=&sortBy=createdAt&sortOrder=asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Records per page (max: 500)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search term (matches name or email)"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter by status: active, inactive, overdue"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt",
+                  "description": "Field to sort by"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc",
+                  "description": "Sort direction: asc or desc"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of all clients for a given organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Client",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/{{clientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients",
+                "{{clientId}}"
+              ]
+            },
+            "description": "Retrieve a specific client by ID within an organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Client Corp\",\n  \"email\": \"contact@newclient.com\",\n  \"phone\": \"+1-555-0200\",\n  \"address\": \"500 Main St, Boston, MA 02101\",\n  \"status\": \"active\",\n  \"creditLimit\": 75000,\n  \"notes\": \"Referred by Acme Corporation\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients"
+              ]
+            },
+            "description": "Create a new client account within an organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"overdue\",\n  \"creditLimit\": 100000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/{{clientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients",
+                "{{clientId}}"
+              ]
+            },
+            "description": "Update one or more fields of an existing client"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Client",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/{{clientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients",
+                "{{clientId}}"
+              ]
+            },
+            "description": "Delete a client account"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Credit Notes",
+      "description": "Credit notes management endpoints",
+      "item": [
+        {
+          "name": "List Credit Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes?page=1&limit=20&search=&status=&sortBy=createdAt&sortOrder=asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Records per page (max: 500)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search term (matches number, client name, or invoice number)"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter by status: pending, partial, paid"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt",
+                  "description": "Field to sort by"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc",
+                  "description": "Sort direction: asc or desc"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of all credit notes for a given organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Credit Note",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes/{{creditNoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes",
+                "{{creditNoteId}}"
+              ]
+            },
+            "description": "Retrieve a specific credit note by ID within an organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Credit Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"clientName\": \"Acme Corporation\",\n  \"invoiceNumber\": \"INV-2024-001\",\n  \"amount\": 5000,\n  \"status\": \"pending\",\n  \"dueDate\": \"2025-06-12T00:00:00Z\",\n  \"description\": \"Credit for returned goods\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes"
+              ]
+            },
+            "description": "Create a new credit note for a client within an organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Credit Note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"partial\",\n  \"amount\": 2500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes/{{creditNoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes",
+                "{{creditNoteId}}"
+              ]
+            },
+            "description": "Update one or more fields of an existing credit note"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Credit Note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes/{{creditNoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes",
+                "{{creditNoteId}}"
+              ]
+            },
+            "description": "Delete a credit note"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "Base URL for the API (http://localhost:3000 for local development)"
+    },
+    {
+      "key": "orgId",
+      "value": "org-default",
+      "type": "string",
+      "description": "Organization ID"
+    },
+    {
+      "key": "clientId",
+      "value": "550e8400-e29b-41d4-a716-446655440001",
+      "type": "string",
+      "description": "Client UUID (from seeded data)"
+    },
+    {
+      "key": "creditNoteId",
+      "value": "660e8400-e29b-41d4-a716-446655550001",
+      "type": "string",
+      "description": "Credit Note UUID (from seeded data)"
+    }
+  ]
+}
