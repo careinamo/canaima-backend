@@ -11,6 +11,7 @@ provider:
   environment:
     NODE_ENV: ${self:provider.stage}
     TABLE_CLIENTS: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
+    TABLE_CREDIT_NOTES: ${env:TABLE_CREDIT_NOTES_BASE, 'credit-notes'}-${self:provider.stage}
   httpApi:
     cors:
       allowedOrigins:
@@ -35,6 +36,8 @@ provider:
           Resource:
             - !GetAtt ClientsTable.Arn
             - !Sub "${ClientsTable.Arn}/index/*"
+            - !GetAtt CreditNotesTable.Arn
+            - !Sub "${CreditNotesTable.Arn}/index/*"
 
 plugins:
   - serverless-offline
@@ -59,6 +62,7 @@ functions:
           method: GET
           cors: true
 
+  # Clients endpoints
   listClients:
     handler: src/functions/clients/handler.listClients
     events:
@@ -99,6 +103,47 @@ functions:
           method: DELETE
           cors: true
 
+  # Credit Notes endpoints
+  listCreditNotes:
+    handler: src/functions/credit-notes/handler.listCreditNotes
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/credit-notes
+          method: GET
+          cors: true
+
+  getCreditNote:
+    handler: src/functions/credit-notes/handler.getCreditNote
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/credit-notes/{id}
+          method: GET
+          cors: true
+
+  createCreditNote:
+    handler: src/functions/credit-notes/handler.createCreditNote
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/credit-notes
+          method: POST
+          cors: true
+
+  updateCreditNote:
+    handler: src/functions/credit-notes/handler.updateCreditNote
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/credit-notes/{id}
+          method: PUT
+          cors: true
+
+  deleteCreditNote:
+    handler: src/functions/credit-notes/handler.deleteCreditNote
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/credit-notes/{id}
+          method: DELETE
+          cors: true
+
 resources:
   Resources:
     ClientsTable:
@@ -122,6 +167,39 @@ resources:
           - IndexName: emailIndex
             KeySchema:
               - AttributeName: emailLower
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    CreditNotesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_CREDIT_NOTES_BASE, 'credit-notes'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: statusGSI
+            AttributeType: S
+          - AttributeName: clientIdGSI
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: statusIndex
+            KeySchema:
+              - AttributeName: statusGSI
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: clientIdIndex
+            KeySchema:
+              - AttributeName: clientIdGSI
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
