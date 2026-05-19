@@ -15,7 +15,8 @@
     "lint": "eslint src --ext .ts",
     "seed:clients": "tsx src/seeds/clients.ts",
     "seed:credit-notes": "tsx src/seeds/credit-notes.ts",
-    "seed": "npm run seed:clients && npm run seed:credit-notes"
+    "seed:payments": "tsx src/seeds/payments.ts",
+    "seed": "npm run seed:clients && npm run seed:credit-notes && npm run seed:payments"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1045.0",

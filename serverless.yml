@@ -12,6 +12,7 @@ provider:
     NODE_ENV: ${self:provider.stage}
     TABLE_CLIENTS: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
     TABLE_CREDIT_NOTES: ${env:TABLE_CREDIT_NOTES_BASE, 'credit-notes'}-${self:provider.stage}
+    TABLE_PAYMENTS: ${env:TABLE_PAYMENTS_BASE, 'payments'}-${self:provider.stage}
   httpApi:
     cors:
       allowedOrigins:
@@ -38,6 +39,8 @@ provider:
             - !Sub "${ClientsTable.Arn}/index/*"
             - !GetAtt CreditNotesTable.Arn
             - !Sub "${CreditNotesTable.Arn}/index/*"
+            - !GetAtt PaymentsTable.Arn
+            - !Sub "${PaymentsTable.Arn}/index/*"
 
 plugins:
   - serverless-offline
@@ -144,6 +147,47 @@ functions:
           method: DELETE
           cors: true
 
+  # Payments endpoints
+  listPayments:
+    handler: src/functions/payments/handler.listPayments
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/payments
+          method: GET
+          cors: true
+
+  getPayment:
+    handler: src/functions/payments/handler.getPayment
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/payments/{id}
+          method: GET
+          cors: true
+
+  createPayment:
+    handler: src/functions/payments/handler.createPayment
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/payments
+          method: POST
+          cors: true
+
+  updatePayment:
+    handler: src/functions/payments/handler.updatePayment
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/payments/{id}
+          method: PUT
+          cors: true
+
+  deletePayment:
+    handler: src/functions/payments/handler.deletePayment
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/payments/{id}
+          method: DELETE
+          cors: true
+
 resources:
   Resources:
     ClientsTable:
@@ -167,6 +211,47 @@ resources:
           - IndexName: emailIndex
             KeySchema:
               - AttributeName: emailLower
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    PaymentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_PAYMENTS_BASE, 'payments'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: clientIdGSI
+            AttributeType: S
+          - AttributeName: statusGSI
+            AttributeType: S
+          - AttributeName: methodGSI
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: clientIdIndex
+            KeySchema:
+              - AttributeName: clientIdGSI
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: statusIndex
+            KeySchema:
+              - AttributeName: statusGSI
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: methodIndex
+            KeySchema:
+              - AttributeName: methodGSI
                 KeyType: HASH
             Projection:
               ProjectionType: ALL

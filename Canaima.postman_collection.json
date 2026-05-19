@@ -343,6 +343,185 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Payments",
+      "description": "Payments management endpoints",
+      "item": [
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments?page=1&limit=10&search=&status=&method=&clientId=&sortBy=createdAt&sortOrder=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (max: 100)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search term (matches number, client name, or invoice number)"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter by status: confirmed, pending, rejected"
+                },
+                {
+                  "key": "method",
+                  "value": "",
+                  "description": "Filter by method: cash, bank_transfer, mobile_payment, credit_card, other"
+                },
+                {
+                  "key": "clientId",
+                  "value": "",
+                  "description": "Filter by client ID"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt",
+                  "description": "Field to sort by"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc",
+                  "description": "Sort direction: asc or desc"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of all payments for a given organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Retrieve a specific payment by ID within an organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"invoiceNumber\": \"FAC-2024-001\",\n  \"amount\": 5000,\n  \"method\": \"bank_transfer\",\n  \"status\": \"pending\",\n  \"bankName\": \"Banco Provincial\",\n  \"reference\": \"REF-89012\",\n  \"description\": \"Abono factura abril\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments"
+              ]
+            },
+            "description": "Create a new payment for a client within an organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Payment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\",\n  \"description\": \"Pago confirmado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Update one or more fields of an existing payment"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Payment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Delete a payment"
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -369,6 +548,12 @@
       "value": "660e8400-e29b-41d4-a716-446655550001",
       "type": "string",
       "description": "Credit Note UUID (from seeded data)"
+    },
+    {
+      "key": "paymentId",
+      "value": "770e8400-e29b-41d4-a716-446655660001",
+      "type": "string",
+      "description": "Payment UUID (from seeded data)"
     }
   ]
 }
