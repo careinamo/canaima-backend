@@ -20,14 +20,20 @@ src/
 │   │   ├── repository.ts   # DynamoDB operations
 │   │   ├── validators.ts   # Input validation
 │   │   └── types.ts        # TypeScript interfaces
-│   └── credit-notes/       # Credit Notes module
+│   ├── credit-notes/       # Credit Notes module
+│   │   ├── handler.ts      # Route handlers (5 endpoints)
+│   │   ├── repository.ts   # DynamoDB operations
+│   │   ├── validators.ts   # Input validation
+│   │   └── types.ts        # TypeScript interfaces
+│   └── payments/           # Payments module
 │       ├── handler.ts      # Route handlers (5 endpoints)
 │       ├── repository.ts   # DynamoDB operations
 │       ├── validators.ts   # Input validation
 │       └── types.ts        # TypeScript interfaces
 └── seeds/
     ├── clients.ts          # Database seed data for clients
-    └── credit-notes.ts     # Database seed data for credit notes
+    ├── credit-notes.ts     # Database seed data for credit notes
+    └── payments.ts         # Database seed data for payments
 ```
 
 ## Configuration
@@ -39,6 +45,7 @@ Create a `.env` file in the project root:
 ```env
 TABLE_CLIENTS_BASE=clientsaaa
 TABLE_CREDIT_NOTES_BASE=credit-notes
+TABLE_PAYMENTS_BASE=payments
 AWS_REGION=us-east-2
 SEED_ORG_ID=org-default
 ```
@@ -46,8 +53,99 @@ SEED_ORG_ID=org-default
 **Variables:**
 - `TABLE_CLIENTS_BASE`: Base name for the clients table (stage is appended: `clientsaaa-dev`, `clientsaaa-prod`)
 - `TABLE_CREDIT_NOTES_BASE`: Base name for the credit notes table (stage is appended: `credit-notes-dev`, `credit-notes-prod`)
+- `TABLE_PAYMENTS_BASE`: Base name for the payments table (stage is appended: `payments-dev`, `payments-prod`)
 - `AWS_REGION`: AWS region for DynamoDB connection
 - `SEED_ORG_ID`: Organization ID used by the seed script
+
+---
+
+## Credit Limit Logic Overview
+
+The Canaima system enforces a **credit limit** mechanism to prevent clients from accumulating excessive debt. Here's how it works:
+
+### Core Concepts
+
+1. **`accumulatedDebt`**: Represents the client's total outstanding debt at any given time.
+   - **Increases** when a credit note is created (client is owed money)
+   - **Decreases** when a payment is received (client pays)
+   - **Must always be** ≤ `creditLimit`
+
+2. **`creditLimit`**: The maximum amount of debt a client is allowed to accumulate.
+   - Set at client creation and can be updated at any time
+   - When updated, system validates that current `accumulatedDebt` ≤ new `creditLimit`
+
+3. **Atomic Transactions**: All debt modifications use DynamoDB TransactWriteCommand to ensure consistency:
+   - **Credit Note Creation**: Adds `amount` to `accumulatedDebt` (validates beforehand that new total ≤ limit)
+   - **Payment Creation**: Subtracts `amount` from `accumulatedDebt` (validates beforehand that amount ≤ current debt)
+
+### Credit Limit Violation Scenarios
+
+#### Scenario 1: Creating a Credit Note That Exceeds the Limit
+When you try to create a credit note with an amount that would push `accumulatedDebt` over `creditLimit`:
+
+**Request:**
+```bash
+curl -X POST "http://localhost:3000/orgs/org-default/credit-notes" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "550e8400-e29b-41d4-a716-446655440001",
+    "invoiceNumber": "INV-2024-001",
+    "amount": 5000,
+    "dueDate": "2025-06-12T00:00:00Z"
+  }'
+```
+
+**Assume:** Client has `creditLimit: 50000` and `accumulatedDebt: 47000`  
+**Result:** New debt would be 52000, which exceeds 50000
+
+**Response (400 Bad Request):**
+```json
+{
+  "error": "Credit limit exceeded",
+  "type": "CREDIT_LIMIT_EXCEEDED",
+  "data": {
+    "creditLimit": 50000,
+    "exceedAmount": 2000
+  }
+}
+```
+
+The `exceedAmount: 2000` tells the client exactly how much over the limit the transaction would be.
+
+#### Scenario 2: Successful Credit Note Creation (Within Limit)
+**Assume:** Client has `creditLimit: 50000` and `accumulatedDebt: 45000`  
+**Request amount:** 5000 (total would be 50000 = exactly at limit)
+
+**Response (201 Created):**
+```json
+{
+  "id": "660e8400-e29b-41d4-a716-446655550001",
+  "number": "NC-001",
+  "orgId": "org-default",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "invoiceNumber": "INV-2024-001",
+  "amount": 5000,
+  "status": "pending",
+  "dueDate": "2025-06-12T00:00:00Z",
+  "createdAt": "2025-05-13T14:30:00.000Z",
+  "updatedAt": "2025-05-13T14:30:00.000Z"
+}
+```
+
+#### Scenario 3: Updating Credit Limit to Below Current Debt
+When updating a client's `creditLimit` to a value lower than current `accumulatedDebt`:
+
+**Current state:** `creditLimit: 50000`, `accumulatedDebt: 45000`  
+**Update request:** New `creditLimit: 40000`
+
+**Response (400 Bad Request):**
+```json
+{
+  "error": "Credit limit cannot be set below current accumulated debt"
+}
+```
+
+---
 
 ## Clients API Endpoints
 
@@ -255,7 +353,7 @@ Update one or more fields of an existing client.
 | `phone` | string | Phone number |
 | `address` | string | Physical address |
 | `status` | string | Status: `active`, `inactive`, or `overdue` |
-| `creditLimit` | number | Credit limit amount (≥ 0) |
+| `creditLimit` | number | Credit limit amount (≥ 0). **If updated, must be ≥ current `accumulatedDebt`** |
 | `notes` | string | Internal notes |
 
 **Example Request:**
@@ -285,6 +383,26 @@ curl -X PUT http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372-a5
   "notes": "Referred by Acme Corporation",
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:35:00.000Z"
+}
+```
+
+**Credit Limit Validation Error:**
+
+If attempting to update `creditLimit` to a value lower than current `accumulatedDebt`:
+
+```bash
+curl -X PUT http://localhost:3000/orgs/org-default/clients/550e8400-e29b-41d4-a716-446655440001 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "creditLimit": 10000
+  }'
+```
+
+**Response (400 Bad Request):**
+
+```json
+{
+  "error": "Credit limit cannot be set below current accumulated debt"
 }
 ```
 
@@ -333,6 +451,8 @@ curl -X DELETE http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372
 ### Overview
 
 The Credit Notes module provides REST API endpoints for managing B2B credit notes (adjustments, allowances, and credits) for invoices. All endpoints are namespaced under `/orgs/{orgId}/credit-notes` and scoped by organization.
+
+**Credit Limit Integration:** Creating a credit note increases the client's `accumulatedDebt`. The system prevents credit note creation if it would cause `accumulatedDebt` to exceed the client's `creditLimit`.
 
 ### Endpoints Table
 
@@ -452,6 +572,8 @@ curl http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716
 
 Create a new credit note for a client within an organization.
 
+**Important:** This endpoint integrates with the **credit limit system**. The system will prevent creation if the new debt would exceed the client's credit limit.
+
 **Path Parameters:**
 
 | Parameter | Type | Description |
@@ -471,7 +593,7 @@ Create a new credit note for a client within an organization.
 | `dueDate` | string | ✓ | Due date in ISO 8601 format |
 | `description` | string | - | Reason or description of the credit |
 
-**Example Request:**
+**Example Request (Success):**
 
 ```bash
 curl -X POST http://localhost:3000/orgs/org-default/credit-notes \
@@ -506,9 +628,46 @@ curl -X POST http://localhost:3000/orgs/org-default/credit-notes \
 }
 ```
 
+**Example Request (Credit Limit Exceeded):**
+
+Assume client has `creditLimit: 50000` and `accumulatedDebt: 49500`. Attempting to create a credit note with `amount: 1000`:
+
+```bash
+curl -X POST http://localhost:3000/orgs/org-default/credit-notes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "550e8400-e29b-41d4-a716-446655440001",
+    "clientName": "Acme Corporation",
+    "invoiceNumber": "INV-2024-001",
+    "amount": 1000,
+    "status": "pending",
+    "dueDate": "2025-06-12T00:00:00Z",
+    "description": "Credit for returned goods"
+  }'
+```
+
+**Response (400 Bad Request):**
+
+```json
+{
+  "error": "Credit limit exceeded",
+  "type": "CREDIT_LIMIT_EXCEEDED",
+  "data": {
+    "creditLimit": 50000,
+    "exceedAmount": 500
+  }
+}
+```
+
+The response includes:
+- `creditLimit`: The client's maximum allowed debt
+- `exceedAmount`: How much the transaction would exceed the limit (new debt - credit limit)
+
 **Error Responses:**
 
 - **400 Bad Request**: Validation failed (missing required field, invalid date format, non-positive amount, etc.)
+- **400 Bad Request**: Credit limit would be exceeded (structured error with `type`, `data`)
+- **404 Not Found**: Client not found
 
 ---
 
@@ -605,11 +764,328 @@ curl -X DELETE http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b
 
 ---
 
-## DynamoDB Table Schema
+## Payments API Endpoints
 
 ### Overview
 
-The table uses a **single-table design** with composite keys (`PK` + `SK`) to support multiple entity types within the same table. This enables efficient queries scoped by organization and allows future entity types (invoices, payments, etc.) to be stored alongside clients.
+The Payments module manages payment records for clients. Each payment represents an amount received against an invoice, scoped by organization.
+
+**Credit Limit Integration:** Creating a payment decreases the client's `accumulatedDebt`. The system prevents payment creation if the payment amount exceeds the client's current `accumulatedDebt`.
+
+Base path: `/orgs/{orgId}/payments`
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|-------------|
+| **GET** | `/orgs/{orgId}/payments` | `listPayments` | List all payments (paginated with filters) | 200 |
+| **GET** | `/orgs/{orgId}/payments/{id}` | `getPayment` | Get a specific payment | 200, 404 |
+| **POST** | `/orgs/{orgId}/payments` | `createPayment` | Create a new payment | 201, 400 |
+| **PUT** | `/orgs/{orgId}/payments/{id}` | `updatePayment` | Update a payment | 200, 400, 404 |
+| **DELETE** | `/orgs/{orgId}/payments/{id}` | `deletePayment` | Delete a payment | 200, 404 |
+
+---
+
+## Payments Endpoint Details
+
+### 1. GET /orgs/{orgId}/payments — List Payments
+
+List all payments for an organization with pagination and filtering.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+
+**Query Parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| page | number | 1 | Page number (starts at 1) |
+| limit | number | 10 | Records per page (max: 100) |
+| search | string | - | Search in: number, clientName, invoiceNumber (case-insensitive) |
+| status | string | - | Filter by: confirmed, pending, rejected |
+| method | string | - | Filter by: cash, bank_transfer, mobile_payment, credit_card, other |
+| clientId | string | - | Filter payments for a specific client |
+| sortBy | string | createdAt | Sort field: createdAt, amount, number, clientName |
+| sortOrder | string | desc | Sort order: asc or desc |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/payments?page=1&limit=10&status=confirmed&sortBy=amount&sortOrder=desc"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "id": "770e8400-e29b-41d4-a716-446655660001",
+      "orgId": "org-default",
+      "number": "AB-001",
+      "clientId": "550e8400-e29b-41d4-a716-446655440001",
+      "clientName": "Acme Corporation",
+      "invoiceNumber": "FAC-2024-001",
+      "amount": 5000,
+      "method": "bank_transfer",
+      "status": "confirmed",
+      "bankName": "Banco Provincial",
+      "reference": "REF-89012",
+      "description": "Payment for invoice April",
+      "createdAt": "2026-05-03T12:30:00.000Z",
+      "updatedAt": "2026-05-03T12:30:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "totalPages": 5,
+    "totalCount": 42
+  }
+}
+```
+
+---
+
+### 2. GET /orgs/{orgId}/payments/{id} — Get Single Payment
+
+Get a specific payment by ID.
+
+**Path Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| orgId | string | Organization ID |
+| id | string | Payment UUID |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-446655660001"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "770e8400-e29b-41d4-a716-446655660001",
+  "orgId": "org-default",
+  "number": "AB-001",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "clientName": "Acme Corporation",
+  "invoiceNumber": "FAC-2024-001",
+  "amount": 5000,
+  "method": "bank_transfer",
+  "status": "confirmed",
+  "bankName": "Banco Provincial",
+  "reference": "REF-89012",
+  "description": "Payment for invoice April",
+  "createdAt": "2026-05-03T12:30:00.000Z",
+  "updatedAt": "2026-05-03T12:30:00.000Z"
+}
+```
+
+**Error Responses:**
+
+- **404 Not Found**: Payment does not exist or does not belong to the organization
+
+---
+
+### 3. POST /orgs/{orgId}/payments — Create Payment
+
+Create a new payment.
+
+**Important:** This endpoint integrates with the **credit limit system**. The system prevents payment creation if the payment amount exceeds the client's current `accumulatedDebt`.
+
+**Path Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| orgId | string | Organization ID |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| clientId | string | ✓ | Client UUID |
+| invoiceNumber | string | ✓ | Associated invoice number |
+| amount | number | ✓ | Payment amount (must be > 0) |
+| method | string | ✓ | Payment method (cash, bank_transfer, mobile_payment, credit_card, other) |
+| status | string | - | Payment status (confirmed, pending, rejected; default: pending) |
+| bankName | string | - | Bank name (recommended for bank_transfer, mobile_payment) |
+| reference | string | - | Transaction/voucher reference |
+| description | string | - | Notes or observations |
+
+**Example Request (Success):**
+
+```bash
+curl -X POST "http://localhost:3000/orgs/org-default/payments" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "550e8400-e29b-41d4-a716-446655440001",
+    "invoiceNumber": "FAC-2024-001",
+    "amount": 5000,
+    "method": "bank_transfer",
+    "status": "pending",
+    "bankName": "Banco Provincial",
+    "reference": "REF-89012",
+    "description": "Payment for invoice April"
+  }'
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": "770e8400-e29b-41d4-a716-446655660001",
+  "orgId": "org-default",
+  "number": "AB-001",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "clientName": "Acme Corporation",
+  "invoiceNumber": "FAC-2024-001",
+  "amount": 5000,
+  "method": "bank_transfer",
+  "status": "pending",
+  "bankName": "Banco Provincial",
+  "reference": "REF-89012",
+  "description": "Payment for invoice April",
+  "createdAt": "2026-05-13T14:30:00.000Z",
+  "updatedAt": "2026-05-13T14:30:00.000Z"
+}
+```
+
+**Example Request (Payment Exceeds Accumulated Debt):**
+
+Assume client has `accumulatedDebt: 3000`. Attempting to create a payment with `amount: 5000`:
+
+```bash
+curl -X POST "http://localhost:3000/orgs/org-default/payments" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "550e8400-e29b-41d4-a716-446655440001",
+    "invoiceNumber": "FAC-2024-001",
+    "amount": 5000,
+    "method": "bank_transfer"
+  }'
+```
+
+**Response (400 Bad Request):**
+
+```json
+{
+  "error": "Payment amount cannot exceed client accumulated debt: 5000 > 3000"
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Validation failed (missing required fields, invalid amount, invalid method, etc.)
+- **400 Bad Request**: Payment amount exceeds accumulated debt
+- **404 Not Found**: Client not found in the organization
+
+---
+
+### 4. PUT /orgs/{orgId}/payments/{id} — Update Payment
+
+Update an existing payment (partial update).
+
+**Path Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| orgId | string | Organization ID |
+| id | string | Payment UUID |
+
+**Request Body:** (all fields optional)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| clientId | string | Client UUID (re-resolves clientName) |
+| invoiceNumber | string | Invoice number |
+| amount | number | Payment amount (> 0) |
+| method | string | Payment method |
+| status | string | Payment status |
+| bankName | string | Bank name |
+| reference | string | Transaction reference |
+| description | string | Notes |
+
+**Example Request:**
+
+```bash
+curl -X PUT "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-446655660001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "confirmed",
+    "description": "Payment confirmed"
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "770e8400-e29b-41d4-a716-446655660001",
+  "orgId": "org-default",
+  "number": "AB-001",
+  "clientId": "550e8400-e29b-41d4-a716-446655440001",
+  "clientName": "Acme Corporation",
+  "invoiceNumber": "FAC-2024-001",
+  "amount": 5000,
+  "method": "bank_transfer",
+  "status": "confirmed",
+  "bankName": "Banco Provincial",
+  "reference": "REF-89012",
+  "description": "Payment confirmed",
+  "createdAt": "2026-05-13T14:30:00.000Z",
+  "updatedAt": "2026-05-13T14:35:00.000Z"
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Validation failed
+- **404 Not Found**: Payment does not exist or client not found
+
+---
+
+### 5. DELETE /orgs/{orgId}/payments/{id} — Delete Payment
+
+Delete a payment.
+
+**Path Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| orgId | string | Organization ID |
+| id | string | Payment UUID |
+
+**Example Request:**
+
+```bash
+curl -X DELETE "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-446655660001"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "Payment deleted"
+}
+```
+
+**Error Responses:**
+
+- **404 Not Found**: Payment does not exist
+
+---
+
+## DynamoDB Table Schemas
+
+### Clients Table
 
 - **Table Name**: `{TABLE_CLIENTS_BASE}-{stage}` (e.g., `clientsaaa-dev`)
 - **Billing Mode**: PAY_PER_REQUEST (on-demand)
@@ -794,6 +1270,48 @@ For sequential note number generation:
 
 ---
 
+### Payments Table
+
+- **Table Name**: `{TABLE_PAYMENTS_BASE}-{stage}` (e.g., `payments-dev`)
+- **Billing Mode**: PAY_PER_REQUEST
+- **Partition Key**: `PK` (String) — Format: `org#<orgId>`
+- **Sort Key**: `SK` (String) — Format: `payment#<paymentId>`
+
+#### Attributes
+
+| Attribute | Type | Description | Notes |
+|-----------|------|-------------|-------|
+| `PK` | String | Partition key: `org#<orgId>` | Primary Key (HASH) |
+| `SK` | String | Sort key: `payment#<paymentId>` | Primary Key (RANGE) |
+| `id` | String | Payment UUID | Business identifier |
+| `orgId` | String | Organization ID | Business identifier |
+| `number` | String | Payment number (AB-001, AB-002, etc.) | Auto-generated if not provided |
+| `numberLower` | String | Lowercase number for case-insensitive search | Internal use |
+| `clientId` | String | Client UUID | Reference to Clients table |
+| `clientIdGSI` | String | Client UUID copy | clientIdIndex |
+| `clientName` | String | Client name (denormalized) | For list display |
+| `invoiceNumber` | String | Invoice number | - |
+| `amount` | Number | Payment amount | Must be > 0 |
+| `method` | String | Payment method | cash, bank_transfer, mobile_payment, credit_card, other |
+| `methodGSI` | String | Payment method copy | methodIndex |
+| `status` | String | Payment status | confirmed, pending, rejected |
+| `statusGSI` | String | Status copy | statusIndex |
+| `bankName` | String | Bank name (optional) | - |
+| `reference` | String | Reference/voucher (optional) | - |
+| `description` | String | Notes (optional) | - |
+| `createdAt` | String | ISO 8601 timestamp | Auto-generated |
+| `updatedAt` | String | ISO 8601 timestamp | Auto-updated |
+
+#### Global Secondary Indexes (GSI)
+
+| Index Name | Partition Key | Purpose |
+|------------|----------------|---------|
+| clientIdIndex | clientIdGSI | Filter payments by client |
+| statusIndex | statusGSI | Filter payments by status |
+| methodIndex | methodGSI | Filter payments by method |
+
+---
+
 ## Development
 
 ### Local Development
@@ -820,7 +1338,12 @@ npm run seed:clients
 npm run seed:credit-notes
 ```
 
-**Seed both (clients and credit notes):**
+**Seed payments only:**
+```bash
+npm run seed:payments
+```
+
+**Seed all (clients, credit notes, and payments):**
 ```bash
 npm run seed
 ```
@@ -863,6 +1386,19 @@ All endpoints return standardized JSON error responses:
 }
 ```
 
+**Credit Limit Exceeded (400 Bad Request):**
+
+```json
+{
+  "error": "Credit limit exceeded",
+  "type": "CREDIT_LIMIT_EXCEEDED",
+  "data": {
+    "creditLimit": 50000,
+    "exceedAmount": 2000
+  }
+}
+```
+
 **Resource Not Found (404 Not Found):**
 
 ```json
@@ -891,42 +1427,83 @@ All endpoints return standardized JSON error responses:
 
 ## Data Validation
 
-### Client Creation & Update Rules
+### Client Validation Rules
 
 - **name**: Required, non-empty string
 - **email**: Required, valid email format, globally unique
 - **phone**: Optional string
 - **address**: Optional string
 - **status**: Required, one of: `active`, `inactive`, `overdue`
-- **creditLimit**: Required, non-negative number
+- **creditLimit**: Required, non-negative number (cannot be set below current `accumulatedDebt`)
 - **notes**: Optional string
 
-### Search & Filtering
+### Credit Note Validation Rules
 
-- **Search** (`?search=term`): Case-insensitive match against `name` and `email`
-- **Status Filter** (`?status=active`): Exact match on status field
-- **Pagination**: Safe defaults (page=1, limit=20, max limit=500)
-- **Sorting**: Available on any Client field (default: `createdAt` ascending)
-
----
-
-## Credit Notes Data Validation
-
-### Credit Note Creation & Update Rules
-
-- **number**: Optional string; auto-generated as NC-XXX if not provided
 - **clientId**: Required, must be a valid UUID referencing an existing Client
-- **clientName**: Required, non-empty string (denormalized from Client for display)
 - **invoiceNumber**: Required, non-empty string
 - **amount**: Required, positive number (> 0)
 - **status**: Optional, one of: `pending`, `partial`, `paid` (default: `pending`)
 - **dueDate**: Required, valid ISO 8601 date string
 - **description**: Optional string
+- **Credit Limit Enforcement**: Creating a credit note will fail with HTTP 400 if `accumulatedDebt + amount > creditLimit`
+
+### Payment Validation Rules
+
+- **clientId**: Required, must be a valid UUID referencing an existing Client
+- **invoiceNumber**: Required, non-empty string
+- **amount**: Required, positive number (> 0)
+- **method**: Required, one of: `cash`, `bank_transfer`, `mobile_payment`, `credit_card`, `other`
+- **status**: Optional, one of: `confirmed`, `pending`, `rejected` (default: `pending`)
+- **bankName**: Optional string (recommended for bank_transfer, mobile_payment)
+- **reference**: Optional string
+- **description**: Optional string
+- **Accumulated Debt Enforcement**: Creating a payment will fail with HTTP 400 if `amount > accumulatedDebt`
 
 ### Search & Filtering
 
-- **Search** (`?search=term`): Case-insensitive match against `number`, `clientName`, and `invoiceNumber`
-- **Status Filter** (`?status=pending`): Exact match on status field (pending, partial, paid)
-- **Pagination**: Safe defaults (page=1, limit=20, max limit=500)
-- **Sorting**: Available on any CreditNote field (default: `createdAt` ascending)
-- **Sequential Numbers**: Credit note numbers are auto-generated in sequence (NC-001, NC-002, etc.) using an atomic counter in DynamoDB
+- **Search** (`?search=term`): Case-insensitive match against applicable fields
+- **Status Filters**: Exact match on status field
+- **Pagination**: Safe defaults (page=1, limit varies, max limit enforced)
+- **Sorting**: Available on any resource field (default: `createdAt` ascending/descending per endpoint)
+- **Sequential Numbers**: Credit note and payment numbers are auto-generated in sequence using atomic counters in DynamoDB
+
+---
+
+## Atomic Transactions
+
+The system uses **DynamoDB TransactWriteCommand** for all debt modifications to ensure data consistency:
+
+### Credit Note Creation Transaction
+```
+1. PUT: Create new credit note record
+2. UPDATE: Increment client accumulatedDebt
+   - Condition: attribute_exists(PK)
+   - Expression: SET accumulatedDebt = accumulatedDebt + :amount
+```
+
+### Payment Creation Transaction
+```
+1. PUT: Create new payment record
+2. UPDATE: Decrement client accumulatedDebt
+   - Condition: attribute_exists(PK)
+   - Expression: SET accumulatedDebt = accumulatedDebt - :amount
+   - Also SET: lastPayment = :now
+```
+
+Both transactions are atomic: either both operations succeed or both are rolled back, ensuring the client's `accumulatedDebt` stays in sync with created credit notes and payments.
+
+---
+
+## Implementation Notes
+
+### Backward Compatibility
+
+The system maintains backward compatibility with legacy `balance` field by mapping it to `accumulatedDebt` in read operations. Any old records with `balance` will be treated as `accumulatedDebt`.
+
+### Multi-Tenancy
+
+All tables use organization-scoped partition keys (`org#<orgId>`) to ensure complete data isolation between organizations. Query operations are scoped to a single organization's partition for security and performance.
+
+### Scalability
+
+Using PAY_PER_REQUEST billing mode ensures the system scales automatically with demand without capacity planning. The single-table design with composite keys enables efficient queries and future feature additions.
