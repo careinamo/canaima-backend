@@ -131,6 +131,12 @@ export const createPayment = async (
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
     if ((e as Error).message.includes('Client not found')) return clientError(404, (e as Error).message);
+    if ((e as Error).message.includes('cannot exceed client accumulated debt')) {
+      return clientError(400, (e as Error).message);
+    }
+    if ((e as { name?: string }).name === 'TransactionCanceledException') {
+      return clientError(400, 'Payment amount cannot exceed client accumulated debt');
+    }
     console.error('createPayment error:', e);
     return serverError();
   }

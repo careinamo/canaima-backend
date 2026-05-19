@@ -1,7 +1,8 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { ValidationError, validateCreateCreditNote, validateUpdateCreditNote } from './validators';
 import * as repo from './repository';
-import type { CreditNoteStatus } from './types';
+import { CreditLimitExceededError } from './repository';
+import type { CreditNote, CreditNoteStatus } from './types';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -55,7 +56,7 @@ export const listCreditNotes = async (
       status,
       page,
       limit,
-      sortBy: sortBy as keyof any,
+      sortBy: sortBy as keyof CreditNote,
       sortOrder,
     });
 
@@ -121,6 +122,20 @@ export const createCreditNote = async (
     return respond(201, creditNote);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
+    if ((e as Error).message.includes('Client not found')) return clientError(404, (e as Error).message);
+    if (e instanceof CreditLimitExceededError) {
+      return respond(400, {
+        error: 'Credit limit exceeded',
+        type: 'CREDIT_LIMIT_EXCEEDED',
+        data: {
+          creditLimit: e.creditLimit,
+          exceedAmount: e.exceedAmount,
+        },
+      });
+    }
+    if ((e as { name?: string }).name === 'TransactionCanceledException') {
+      return clientError(400, 'Credit limit exceeded for this client');
+    }
     console.error('createCreditNote error:', e);
     return serverError();
   }

@@ -26,8 +26,25 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
  * Strip internal DynamoDB fields (PK, SK, nameLower, emailLower) before returning to callers.
  */
 function toClient(record: Record<string, unknown>): Client {
-  const { PK: _pk, SK: _sk, nameLower: _nl, emailLower: _el, ...rest } = record as unknown as ClientRecord;
-  return rest as Client;
+  const {
+    PK: _pk,
+    SK: _sk,
+    nameLower: _nl,
+    emailLower: _el,
+    balance,
+    accumulatedDebt,
+    ...rest
+  } = record as unknown as ClientRecord & { balance?: number; accumulatedDebt?: number };
+
+  return {
+    ...rest,
+    accumulatedDebt:
+      typeof accumulatedDebt === 'number'
+        ? accumulatedDebt
+        : typeof balance === 'number'
+          ? balance
+          : 0,
+  } as Client;
 }
 
 export async function findClientByEmail(email: string): Promise<Client | null> {
@@ -124,7 +141,7 @@ export async function createClient(orgId: string, input: CreateClientInput): Pro
     address: input.address,
     status: input.status,
     creditLimit: input.creditLimit,
-    balance: 0,
+    accumulatedDebt: 0,
     notes: input.notes,
     createdAt: now,
     updatedAt: now,
@@ -183,6 +200,16 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
   let updateExpression = `SET ${sets.join(', ')}`;
   if (removes.length > 0) updateExpression += ` REMOVE ${removes.join(', ')}`;
 
+  let conditionExpression = 'attribute_exists(PK)';
+
+  if (input.creditLimit !== undefined) {
+    conditionExpression +=
+      ' AND if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) <= :creditLimit';
+    names['#accumulatedDebt'] = 'accumulatedDebt';
+    names['#legacyBalance'] = 'balance';
+    values[':zero'] = 0;
+  }
+
   try {
     const result = await ddb.send(
       new UpdateCommand({
@@ -191,7 +218,78 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: values,
         ExpressionAttributeNames: names,
-        ConditionExpression: 'attribute_exists(PK)',
+        ConditionExpression: conditionExpression,
+        ReturnValues: 'ALL_NEW',
+      }),
+    );
+    return toClient(result.Attributes as Record<string, unknown>);
+  } catch (e) {
+    if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return null;
+    throw e;
+  }
+}
+
+export async function addToAccumulatedDebt(orgId: string, clientId: string, amount: number): Promise<Client | null> {
+  const key = { PK: `org#${orgId}`, SK: `client#${clientId}` };
+
+  try {
+    const result = await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE,
+        Key: key,
+        UpdateExpression:
+          'SET #accumulatedDebt = if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) + :amount, #updatedAt = :updatedAt',
+        ExpressionAttributeNames: {
+          '#accumulatedDebt': 'accumulatedDebt',
+          '#legacyBalance': 'balance',
+          '#updatedAt': 'updatedAt',
+          '#creditLimit': 'creditLimit',
+        },
+        ExpressionAttributeValues: {
+          ':amount': amount,
+          ':zero': 0,
+          ':updatedAt': new Date().toISOString(),
+        },
+        ConditionExpression:
+          'attribute_exists(PK) AND if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) + :amount <= #creditLimit',
+        ReturnValues: 'ALL_NEW',
+      }),
+    );
+    return toClient(result.Attributes as Record<string, unknown>);
+  } catch (e) {
+    if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return null;
+    throw e;
+  }
+}
+
+export async function subtractFromAccumulatedDebt(
+  orgId: string,
+  clientId: string,
+  amount: number,
+): Promise<Client | null> {
+  const key = { PK: `org#${orgId}`, SK: `client#${clientId}` };
+
+  try {
+    const result = await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE,
+        Key: key,
+        UpdateExpression:
+          'SET #accumulatedDebt = if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) - :amount, #lastPayment = :lastPayment, #updatedAt = :updatedAt',
+        ExpressionAttributeNames: {
+          '#accumulatedDebt': 'accumulatedDebt',
+          '#legacyBalance': 'balance',
+          '#lastPayment': 'lastPayment',
+          '#updatedAt': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':amount': amount,
+          ':zero': 0,
+          ':lastPayment': new Date().toISOString(),
+          ':updatedAt': new Date().toISOString(),
+        },
+        ConditionExpression:
+          'attribute_exists(PK) AND if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) >= :amount',
         ReturnValues: 'ALL_NEW',
       }),
     );

@@ -9,7 +9,7 @@ export interface Client {
   address?: string;
   status: ClientStatus;
   creditLimit: number;
-  balance: number;
+  accumulatedDebt: number;
   lastPayment?: string;
   notes?: string;
   createdAt: string;

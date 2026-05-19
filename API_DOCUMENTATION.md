@@ -110,7 +110,7 @@ curl http://localhost:3000/orgs/org-default/clients?page=1\&limit=20\&search=acm
       "address": "123 Business Ave, New York, NY 10001",
       "status": "active",
       "creditLimit": 50000,
-      "balance": 12500,
+      "accumulatedDebt": 12500,
       "lastPayment": "2025-05-08T00:00:00.000Z",
       "notes": "Premium client with early payment history",
       "createdAt": "2025-04-13T00:00:00.000Z",
@@ -157,7 +157,7 @@ curl http://localhost:3000/orgs/org-default/clients/550e8400-e29b-41d4-a716-4466
   "address": "123 Business Ave, New York, NY 10001",
   "status": "active",
   "creditLimit": 50000,
-  "balance": 12500,
+  "accumulatedDebt": 12500,
   "lastPayment": "2025-05-08T00:00:00.000Z",
   "notes": "Premium client with early payment history",
   "createdAt": "2025-04-13T00:00:00.000Z",
@@ -221,7 +221,7 @@ curl -X POST http://localhost:3000/orgs/org-default/clients \
   "address": "500 Main St, Boston, MA 02101",
   "status": "active",
   "creditLimit": 75000,
-  "balance": 0,
+  "accumulatedDebt": 0,
   "notes": "Referred by Acme Corporation",
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:30:00.000Z"
@@ -281,7 +281,7 @@ curl -X PUT http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372-a5
   "address": "500 Main St, Boston, MA 02101",
   "status": "overdue",
   "creditLimit": 100000,
-  "balance": 0,
+  "accumulatedDebt": 0,
   "notes": "Referred by Acme Corporation",
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:35:00.000Z"
@@ -640,7 +640,7 @@ The table uses a **single-table design** with composite keys (`PK` + `SK`) to su
 | `address` | String | Client's physical address | Optional |
 | `status` | String | Client status: `active`, `inactive`, `overdue` | - |
 | `creditLimit` | Number | Maximum credit available to the client | Default: 0 |
-| `balance` | Number | Current outstanding balance | Derived from invoices/payments |
+| `accumulatedDebt` | Number | Client's accumulated outstanding debt | Increased by credit notes and decreased by payments |
 | `lastPayment` | String | ISO 8601 timestamp of last payment | Optional |
 | `notes` | String | Internal notes/comments | Optional |
 | `createdAt` | String | ISO 8601 timestamp of creation | Auto-generated |
@@ -674,7 +674,7 @@ This index enables fast lookups to verify email uniqueness during client creatio
   "address": "123 Business Ave, New York, NY 10001",
   "status": "active",
   "creditLimit": 50000,
-  "balance": 12500,
+  "accumulatedDebt": 12500,
   "lastPayment": "2025-05-08T00:00:00.000Z",
   "notes": "Premium client with early payment history",
   "createdAt": "2025-04-13T00:00:00.000Z",
@@ -692,7 +692,7 @@ This index enables fast lookups to verify email uniqueness during client creatio
 
 4. **Email Uniqueness**: Enforced globally via the `emailIndex` GSI and application-level checks in the `findClientByEmail()` repository function.
 
-5. **Balance Tracking**: The `balance` field is computed or synchronized from related invoices/payments. This should be kept up-to-date via triggers or periodic reconciliation.
+5. **Debt Tracking**: The `accumulatedDebt` field is updated transactionally when credit notes are created (adds amount) and when payments are created (subtracts amount), with guards so debt never exceeds `creditLimit`.
 
 6. **Timestamps**: All timestamps are stored as ISO 8601 strings for compatibility and readability.
 

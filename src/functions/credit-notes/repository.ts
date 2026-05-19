@@ -3,15 +3,26 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
+  TransactWriteCommand,
   UpdateCommand,
   DeleteCommand,
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { CreditNote, CreditNoteRecord, CreateCreditNoteInput, UpdateCreditNoteInput, ListCreditNotesParams } from './types';
+import * as clientRepo from '../clients/repository';
+
+export class CreditLimitExceededError extends Error {
+  constructor(
+    public creditLimit: number,
+    public exceedAmount: number,
+  ) {
+    super(`Credit limit exceeded by ${exceedAmount}`);
+    this.name = 'CreditLimitExceededError';
+  }
+}
 
 const TABLE = process.env.TABLE_CREDIT_NOTES as string;
-const STATUS_INDEX = 'statusIndex';
-const CLIENT_INDEX = 'clientIdIndex';
+const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
 
 console.log('Credit Notes Repository initialized. TABLE_CREDIT_NOTES:', TABLE);
 
@@ -140,6 +151,18 @@ export async function listCreditNotes(
 }
 
 export async function createCreditNote(orgId: string, input: CreateCreditNoteInput): Promise<CreditNote> {
+  const client = await clientRepo.getClientById(orgId, input.clientId);
+  if (!client) {
+    throw new Error('Client not found in organization');
+  }
+
+  // Validate that adding this credit note won't exceed credit limit
+  const newDebt = client.accumulatedDebt + input.amount;
+  if (newDebt > client.creditLimit) {
+    const exceedAmount = newDebt - client.creditLimit;
+    throw new CreditLimitExceededError(client.creditLimit, exceedAmount);
+  }
+
   const now = new Date().toISOString();
   const noteId = crypto.randomUUID();
 
@@ -159,7 +182,7 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     numberLower: noteNumber.toLowerCase(),
     clientId: input.clientId,
     clientIdGSI: input.clientId,
-    clientName: input.clientName,
+    clientName: client.name,
     invoiceNumber: input.invoiceNumber,
     amount: input.amount,
     status: input.status || 'pending',
@@ -170,7 +193,39 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     updatedAt: now,
   };
 
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: record }));
+  await ddb.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: TABLE,
+            Item: record,
+            ConditionExpression: 'attribute_not_exists(PK) AND attribute_not_exists(SK)',
+          },
+        },
+        {
+          Update: {
+            TableName: CLIENT_TABLE,
+            Key: { PK: `org#${orgId}`, SK: `client#${input.clientId}` },
+            UpdateExpression:
+              'SET #accumulatedDebt = if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) + :amount, #updatedAt = :updatedAt',
+            ExpressionAttributeNames: {
+              '#accumulatedDebt': 'accumulatedDebt',
+              '#legacyBalance': 'balance',
+              '#updatedAt': 'updatedAt',
+            },
+            ExpressionAttributeValues: {
+              ':amount': input.amount,
+              ':zero': 0,
+              ':updatedAt': now,
+            },
+            ConditionExpression: 'attribute_exists(PK)',
+          },
+        },
+      ],
+    }),
+  );
+
   return toCreditNote(record as unknown as Record<string, unknown>);
 }
 

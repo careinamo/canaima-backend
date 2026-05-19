@@ -3,6 +3,7 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
+  TransactWriteCommand,
   UpdateCommand,
   DeleteCommand,
   QueryCommand,
@@ -152,16 +153,16 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
   const now = new Date().toISOString();
   const paymentId = crypto.randomUUID();
 
-  // Resolve client name
-  let clientName = input.clientId;
-  try {
-    const client = await clientRepo.getClientById(orgId, input.clientId);
-    if (!client) {
-      throw new Error(`Client not found: ${input.clientId}`);
-    }
-    clientName = client.name;
-  } catch (e) {
+  // Resolve client and ensure payment does not exceed current debt.
+  const client = await clientRepo.getClientById(orgId, input.clientId);
+  if (!client) {
     throw new Error(`Client not found in organization: ${input.clientId}`);
+  }
+
+  if (input.amount > client.accumulatedDebt) {
+    throw new Error(
+      `Payment amount ${input.amount} cannot exceed client accumulated debt ${client.accumulatedDebt}`,
+    );
   }
 
   // Generate or use provided number
@@ -180,7 +181,7 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     numberLower: paymentNumber.toLowerCase(),
     clientId: input.clientId,
     clientIdGSI: input.clientId,
-    clientName,
+    clientName: client.name,
     invoiceNumber: input.invoiceNumber,
     amount: input.amount,
     method: input.method,
@@ -194,7 +195,41 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     updatedAt: now,
   };
 
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: record }));
+  await ddb.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: TABLE,
+            Item: record,
+            ConditionExpression: 'attribute_not_exists(PK) AND attribute_not_exists(SK)',
+          },
+        },
+        {
+          Update: {
+            TableName: CLIENT_TABLE,
+            Key: { PK: `org#${orgId}`, SK: `client#${input.clientId}` },
+            UpdateExpression:
+              'SET #accumulatedDebt = if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) - :amount, #lastPayment = :lastPayment, #updatedAt = :updatedAt',
+            ExpressionAttributeNames: {
+              '#accumulatedDebt': 'accumulatedDebt',
+              '#legacyBalance': 'balance',
+              '#lastPayment': 'lastPayment',
+              '#updatedAt': 'updatedAt',
+            },
+            ExpressionAttributeValues: {
+              ':amount': input.amount,
+              ':zero': 0,
+              ':lastPayment': now,
+              ':updatedAt': now,
+            },
+            ConditionExpression: 'attribute_exists(PK)',
+          },
+        },
+      ],
+    }),
+  );
+
   return toPayment(record as unknown as Record<string, unknown>);
 }
 
