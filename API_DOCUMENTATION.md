@@ -508,6 +508,7 @@ curl http://localhost:3000/orgs/org-default/credit-notes?page=1\&limit=20\&searc
       "clientName": "Acme Corporation",
       "invoiceNumber": "INV-2024-001",
       "amount": 5000,
+      "paid": 0,
       "status": "pending",
       "dueDate": "2025-06-12T00:00:00.000Z",
       "description": "Credit for returned goods",
@@ -554,6 +555,7 @@ curl http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716
   "clientName": "Acme Corporation",
   "invoiceNumber": "INV-2024-001",
   "amount": 5000,
+  "paid": 0,
   "status": "pending",
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
@@ -620,6 +622,7 @@ curl -X POST http://localhost:3000/orgs/org-default/credit-notes \
   "clientName": "Acme Corporation",
   "invoiceNumber": "INV-2024-001",
   "amount": 5000,
+  "paid": 0,
   "status": "pending",
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
@@ -717,6 +720,7 @@ curl -X PUT http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41
   "clientName": "Acme Corporation",
   "invoiceNumber": "INV-2024-001",
   "amount": 2500,
+  "paid": 0,
   "status": "partial",
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
@@ -808,6 +812,7 @@ List all payments for an organization with pagination and filtering.
 | status | string | - | Filter by: confirmed, pending, rejected |
 | method | string | - | Filter by: cash, bank_transfer, mobile_payment, credit_card, other |
 | clientId | string | - | Filter payments for a specific client |
+| creditNoteId | string | - | Filter payments for a specific credit note |
 | sortBy | string | createdAt | Sort field: createdAt, amount, number, clientName |
 | sortOrder | string | desc | Sort order: asc or desc |
 
@@ -826,6 +831,7 @@ curl "http://localhost:3000/orgs/org-default/payments?page=1&limit=10&status=con
       "id": "770e8400-e29b-41d4-a716-446655660001",
       "orgId": "org-default",
       "number": "AB-001",
+      "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
       "clientId": "550e8400-e29b-41d4-a716-446655440001",
       "clientName": "Acme Corporation",
       "invoiceNumber": "FAC-2024-001",
@@ -874,6 +880,7 @@ curl "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-44
   "id": "770e8400-e29b-41d4-a716-446655660001",
   "orgId": "org-default",
   "number": "AB-001",
+  "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -898,7 +905,7 @@ curl "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-44
 
 Create a new payment.
 
-**Important:** This endpoint integrates with the **credit limit system**. The system prevents payment creation if the payment amount exceeds the client's current `accumulatedDebt`.
+**Important:** This endpoint integrates with the **credit limit system**. The system prevents payment creation if the payment amount exceeds the client's current `accumulatedDebt`. Additionally, each payment must be associated with an existing credit note. The payment amount is added to the credit note's `paid` field, and when `paid` reaches `amount`, the credit note status is automatically set to `paid`.
 
 **Path Parameters:**
 
@@ -910,9 +917,10 @@ Create a new payment.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| creditNoteId | string | ✓ | Credit Note UUID (must reference an existing credit note) |
 | clientId | string | ✓ | Client UUID |
 | invoiceNumber | string | ✓ | Associated invoice number |
-| amount | number | ✓ | Payment amount (must be > 0) |
+| amount | number | ✓ | Payment amount (must be > 0, cannot exceed credit note remaining balance) |
 | method | string | ✓ | Payment method (cash, bank_transfer, mobile_payment, credit_card, other) |
 | status | string | - | Payment status (confirmed, pending, rejected; default: pending) |
 | bankName | string | - | Bank name (recommended for bank_transfer, mobile_payment) |
@@ -925,6 +933,7 @@ Create a new payment.
 curl -X POST "http://localhost:3000/orgs/org-default/payments" \
   -H "Content-Type: application/json" \
   -d '{
+    "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
     "clientId": "550e8400-e29b-41d4-a716-446655440001",
     "invoiceNumber": "FAC-2024-001",
     "amount": 5000,
@@ -943,6 +952,7 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
   "id": "770e8400-e29b-41d4-a716-446655660001",
   "orgId": "org-default",
   "number": "AB-001",
+  "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -957,6 +967,30 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
 }
 ```
 
+**Example Request (Payment Exceeds Credit Note Remaining Balance):**
+
+Assume credit note has `amount: 5000` and `paid: 4000` (remaining: 1000). Attempting to create a payment with `amount: 2000`:
+
+```bash
+curl -X POST "http://localhost:3000/orgs/org-default/payments" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+    "clientId": "550e8400-e29b-41d4-a716-446655440001",
+    "invoiceNumber": "FAC-2024-001",
+    "amount": 2000,
+    "method": "bank_transfer"
+  }'
+```
+
+**Response (400 Bad Request):**
+
+```json
+{
+  "error": "Payment amount 2000 exceeds credit note remaining balance 1000"
+}
+```
+
 **Example Request (Payment Exceeds Accumulated Debt):**
 
 Assume client has `accumulatedDebt: 3000`. Attempting to create a payment with `amount: 5000`:
@@ -965,6 +999,7 @@ Assume client has `accumulatedDebt: 3000`. Attempting to create a payment with `
 curl -X POST "http://localhost:3000/orgs/org-default/payments" \
   -H "Content-Type: application/json" \
   -d '{
+    "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
     "clientId": "550e8400-e29b-41d4-a716-446655440001",
     "invoiceNumber": "FAC-2024-001",
     "amount": 5000,
@@ -976,7 +1011,7 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
 
 ```json
 {
-  "error": "Payment amount cannot exceed client accumulated debt: 5000 > 3000"
+  "error": "Payment amount 5000 cannot exceed client accumulated debt 3000"
 }
 ```
 
@@ -984,7 +1019,9 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
 
 - **400 Bad Request**: Validation failed (missing required fields, invalid amount, invalid method, etc.)
 - **400 Bad Request**: Payment amount exceeds accumulated debt
+- **400 Bad Request**: Payment amount exceeds credit note remaining balance
 - **404 Not Found**: Client not found in the organization
+- **404 Not Found**: Credit note not found
 
 ---
 
@@ -1003,6 +1040,7 @@ Update an existing payment (partial update).
 
 | Field | Type | Description |
 |-------|------|-------------|
+| creditNoteId | string | Credit Note UUID |
 | clientId | string | Client UUID (re-resolves clientName) |
 | invoiceNumber | string | Invoice number |
 | amount | number | Payment amount (> 0) |
@@ -1030,6 +1068,7 @@ curl -X PUT "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-
   "id": "770e8400-e29b-41d4-a716-446655660001",
   "orgId": "org-default",
   "number": "AB-001",
+  "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -1209,7 +1248,8 @@ The Credit Notes table follows the same single-table design pattern as the Clien
 | `clientName` | String | Client's display name (denormalized) | For list display |
 | `invoiceNumber` | String | Related invoice number | Reference to invoice |
 | `amount` | Number | Credit amount | Must be positive |
-| `status` | String | Status: `pending`, `partial`, or `paid` | - |
+| `paid` | Number | Total amount paid against this credit note | Starts at 0, incremented by payments |
+| `status` | String | Status: `pending`, `partial`, or `paid` | Auto-updated when `paid` reaches `amount` |
 | `statusGSI` | String | Copy of status for GSI queries | For status-based filtering |
 | `dueDate` | String | ISO 8601 timestamp | Payment/application due date |
 | `description` | String | Reason or notes for the credit | Optional |
@@ -1247,6 +1287,7 @@ The Credit Notes table follows the same single-table design pattern as the Clien
   "clientName": "Acme Corporation",
   "invoiceNumber": "INV-2024-001",
   "amount": 5000,
+  "paid": 0,
   "status": "pending",
   "statusGSI": "pending",
   "dueDate": "2025-06-12T00:00:00.000Z",
@@ -1287,6 +1328,8 @@ For sequential note number generation:
 | `orgId` | String | Organization ID | Business identifier |
 | `number` | String | Payment number (AB-001, AB-002, etc.) | Auto-generated if not provided |
 | `numberLower` | String | Lowercase number for case-insensitive search | Internal use |
+| `creditNoteId` | String | Associated Credit Note UUID | Reference to Credit Notes table |
+| `creditNoteIdGSI` | String | Credit Note UUID copy | creditNoteIdIndex |
 | `clientId` | String | Client UUID | Reference to Clients table |
 | `clientIdGSI` | String | Client UUID copy | clientIdIndex |
 | `clientName` | String | Client name (denormalized) | For list display |
@@ -1307,6 +1350,7 @@ For sequential note number generation:
 | Index Name | Partition Key | Purpose |
 |------------|----------------|---------|
 | clientIdIndex | clientIdGSI | Filter payments by client |
+| creditNoteIdIndex | creditNoteIdGSI | Filter payments by credit note |
 | statusIndex | statusGSI | Filter payments by status |
 | methodIndex | methodGSI | Filter payments by method |
 
@@ -1449,6 +1493,7 @@ All endpoints return standardized JSON error responses:
 
 ### Payment Validation Rules
 
+- **creditNoteId**: Required, must reference an existing Credit Note
 - **clientId**: Required, must be a valid UUID referencing an existing Client
 - **invoiceNumber**: Required, non-empty string
 - **amount**: Required, positive number (> 0)
@@ -1458,6 +1503,7 @@ All endpoints return standardized JSON error responses:
 - **reference**: Optional string
 - **description**: Optional string
 - **Accumulated Debt Enforcement**: Creating a payment will fail with HTTP 400 if `amount > accumulatedDebt`
+- **Credit Note Balance Enforcement**: Creating a payment will fail with HTTP 400 if `amount > (creditNote.amount - creditNote.paid)`
 
 ### Search & Filtering
 
@@ -1488,9 +1534,13 @@ The system uses **DynamoDB TransactWriteCommand** for all debt modifications to 
    - Condition: attribute_exists(PK)
    - Expression: SET accumulatedDebt = accumulatedDebt - :amount
    - Also SET: lastPayment = :now
+3. UPDATE: Increment credit note paid amount and update status
+   - Condition: attribute_exists(PK)
+   - Expression: SET paid = :newPaid, status = :newStatus
+   - Status logic: if paid >= amount → 'paid', else → 'partial'
 ```
 
-Both transactions are atomic: either both operations succeed or both are rolled back, ensuring the client's `accumulatedDebt` stays in sync with created credit notes and payments.
+All three transactions are atomic: all operations succeed or all are rolled back, ensuring the client's `accumulatedDebt` and the credit note's `paid` field stay in sync.
 
 ---
 

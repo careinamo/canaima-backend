@@ -15,6 +15,10 @@ export function validateCreatePayment(body: unknown): CreatePaymentInput {
   const input = body as Record<string, unknown>;
 
   // Validate required fields
+  if (!input.creditNoteId || typeof input.creditNoteId !== 'string') {
+    throw new ValidationError('creditNoteId is required and must be a string');
+  }
+
   if (!input.clientId || typeof input.clientId !== 'string') {
     throw new ValidationError('clientId is required and must be a string');
   }
@@ -60,6 +64,7 @@ export function validateCreatePayment(body: unknown): CreatePaymentInput {
 
   return {
     number: input.number as string | undefined,
+    creditNoteId: input.creditNoteId,
     clientId: input.clientId,
     invoiceNumber: input.invoiceNumber,
     amount: input.amount,

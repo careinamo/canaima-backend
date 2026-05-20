@@ -8,6 +8,7 @@ export interface CreditNote {
   clientName: string;
   invoiceNumber: string;
   amount: number;
+  paid: number;
   status: CreditNoteStatus;
   dueDate: string;
   description?: string;

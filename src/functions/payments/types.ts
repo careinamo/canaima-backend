@@ -5,6 +5,7 @@ export interface Payment {
   id: string;
   orgId: string;
   number: string;
+  creditNoteId: string;
   clientId: string;
   clientName: string;
   invoiceNumber: string;
@@ -23,6 +24,7 @@ export interface PaymentRecord extends Payment {
   PK: string; // org#<orgId>
   SK: string; // payment#<paymentId>
   clientIdGSI: string;
+  creditNoteIdGSI: string;
   statusGSI: PaymentStatus;
   methodGSI: PaymentMethod;
   numberLower: string;
@@ -30,6 +32,7 @@ export interface PaymentRecord extends Payment {
 
 export interface CreatePaymentInput {
   number?: string;
+  creditNoteId: string;
   clientId: string;
   invoiceNumber: string;
   amount: number;
@@ -42,6 +45,7 @@ export interface CreatePaymentInput {
 
 export interface UpdatePaymentInput {
   number?: string;
+  creditNoteId?: string;
   clientId?: string;
   invoiceNumber?: string;
   amount?: number;
@@ -58,6 +62,7 @@ export interface ListPaymentsParams {
   status?: PaymentStatus;
   method?: PaymentMethod;
   clientId?: string;
+  creditNoteId?: string;
   page: number;
   limit: number;
   sortBy: keyof Payment;

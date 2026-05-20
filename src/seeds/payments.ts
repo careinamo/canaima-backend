@@ -25,6 +25,16 @@ const CLIENT_NAMES = {
   enterprise: 'Enterprise Solutions Group',
 };
 
+// Credit Note IDs from credit-notes.ts seed
+const CREDIT_NOTE_IDS = {
+  nc001: '660e8400-e29b-41d4-a716-446655550001',
+  nc002: '660e8400-e29b-41d4-a716-446655550002',
+  nc003: '660e8400-e29b-41d4-a716-446655550003',
+  nc004: '660e8400-e29b-41d4-a716-446655550004',
+  nc005: '660e8400-e29b-41d4-a716-446655550005',
+  nc006: '660e8400-e29b-41d4-a716-446655550006',
+};
+
 const seedPayments = [
   {
     id: '770e8400-e29b-41d4-a716-446655660001',
@@ -35,6 +45,8 @@ const seedPayments = [
     clientId: CLIENT_IDS.acme,
     clientIdGSI: CLIENT_IDS.acme,
     clientName: CLIENT_NAMES.acme,
+    creditNoteId: CREDIT_NOTE_IDS.nc001,
+    creditNoteIdGSI: CREDIT_NOTE_IDS.nc001,
     invoiceNumber: 'FAC-2024-001',
     amount: 5000,
     method: 'bank_transfer' as const,
@@ -57,6 +69,8 @@ const seedPayments = [
     clientId: CLIENT_IDS.acme,
     clientIdGSI: CLIENT_IDS.acme,
     clientName: CLIENT_NAMES.acme,
+    creditNoteId: CREDIT_NOTE_IDS.nc002,
+    creditNoteIdGSI: CREDIT_NOTE_IDS.nc002,
     invoiceNumber: 'FAC-2024-002',
     amount: 2500,
     method: 'cash' as const,
@@ -77,6 +91,8 @@ const seedPayments = [
     clientId: CLIENT_IDS.techstart,
     clientIdGSI: CLIENT_IDS.techstart,
     clientName: CLIENT_NAMES.techstart,
+    creditNoteId: CREDIT_NOTE_IDS.nc003,
+    creditNoteIdGSI: CREDIT_NOTE_IDS.nc003,
     invoiceNumber: 'FAC-2024-015',
     amount: 8750,
     method: 'mobile_payment' as const,
@@ -99,6 +115,8 @@ const seedPayments = [
     clientId: CLIENT_IDS.globalMfg,
     clientIdGSI: CLIENT_IDS.globalMfg,
     clientName: CLIENT_NAMES.globalMfg,
+    creditNoteId: CREDIT_NOTE_IDS.nc004,
+    creditNoteIdGSI: CREDIT_NOTE_IDS.nc004,
     invoiceNumber: 'FAC-2024-048',
     amount: 12000,
     method: 'credit_card' as const,
@@ -120,6 +138,8 @@ const seedPayments = [
     clientId: CLIENT_IDS.globalMfg,
     clientIdGSI: CLIENT_IDS.globalMfg,
     clientName: CLIENT_NAMES.globalMfg,
+    creditNoteId: CREDIT_NOTE_IDS.nc005,
+    creditNoteIdGSI: CREDIT_NOTE_IDS.nc005,
     invoiceNumber: 'FAC-2024-052',
     amount: 3500,
     method: 'bank_transfer' as const,
@@ -142,6 +162,8 @@ const seedPayments = [
     clientId: CLIENT_IDS.enterprise,
     clientIdGSI: CLIENT_IDS.enterprise,
     clientName: CLIENT_NAMES.enterprise,
+    creditNoteId: CREDIT_NOTE_IDS.nc006,
+    creditNoteIdGSI: CREDIT_NOTE_IDS.nc006,
     invoiceNumber: 'FAC-2024-061',
     amount: 15000,
     method: 'bank_transfer' as const,

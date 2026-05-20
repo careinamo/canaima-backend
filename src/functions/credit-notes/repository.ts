@@ -185,6 +185,7 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     clientName: client.name,
     invoiceNumber: input.invoiceNumber,
     amount: input.amount,
+    paid: 0,
     status: input.status || 'pending',
     statusGSI: input.status || 'pending',
     dueDate: input.dueDate,

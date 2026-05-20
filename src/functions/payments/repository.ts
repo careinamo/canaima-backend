@@ -13,6 +13,7 @@ import * as clientRepo from '../clients/repository';
 
 const TABLE = process.env.TABLE_PAYMENTS as string;
 const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
+const CREDIT_NOTES_TABLE = process.env.TABLE_CREDIT_NOTES as string;
 
 console.log('Payments Repository initialized. TABLE_PAYMENTS:', TABLE);
 
@@ -28,7 +29,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
  * Strip internal DynamoDB fields (PK, SK, GSI fields, numberLower) before returning to callers.
  */
 function toPayment(record: Record<string, unknown>): Payment {
-  const { PK: _pk, SK: _sk, clientIdGSI: _cg, statusGSI: _sg, methodGSI: _mg, numberLower: _nl, ...rest } = record as unknown as PaymentRecord;
+  const { PK: _pk, SK: _sk, clientIdGSI: _cg, creditNoteIdGSI: _cng, statusGSI: _sg, methodGSI: _mg, numberLower: _nl, ...rest } = record as unknown as PaymentRecord;
   return rest as Payment;
 }
 
@@ -101,6 +102,11 @@ export async function listPayments(params: ListPaymentsParams): Promise<{ items:
     exprValues[':clientId'] = params.clientId;
   }
 
+  if (params.creditNoteId) {
+    filterParts.push('creditNoteId = :creditNoteId');
+    exprValues[':creditNoteId'] = params.creditNoteId;
+  }
+
   if (params.search) {
     filterParts.push('(contains(numberLower, :search) OR contains(clientName, :search) OR contains(invoiceNumber, :search))');
     exprValues[':search'] = params.search.toLowerCase();
@@ -165,6 +171,31 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     );
   }
 
+  // Resolve credit note and validate remaining balance
+  const creditNoteResult = await ddb.send(
+    new GetCommand({
+      TableName: CREDIT_NOTES_TABLE,
+      Key: { PK: `org#${orgId}`, SK: `creditnote#${input.creditNoteId}` },
+    }),
+  );
+
+  if (!creditNoteResult.Item) {
+    throw new Error(`Credit note not found: ${input.creditNoteId}`);
+  }
+
+  const creditNote = creditNoteResult.Item;
+  const currentPaid = (creditNote.paid as number) || 0;
+  const remaining = (creditNote.amount as number) - currentPaid;
+
+  if (input.amount > remaining) {
+    throw new Error(
+      `Payment amount ${input.amount} exceeds credit note remaining balance ${remaining}`,
+    );
+  }
+
+  const newPaid = currentPaid + input.amount;
+  const newStatus = newPaid >= (creditNote.amount as number) ? 'paid' : 'partial';
+
   // Generate or use provided number
   let paymentNumber = input.number;
   if (!paymentNumber) {
@@ -179,6 +210,8 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     orgId,
     number: paymentNumber,
     numberLower: paymentNumber.toLowerCase(),
+    creditNoteId: input.creditNoteId,
+    creditNoteIdGSI: input.creditNoteId,
     clientId: input.clientId,
     clientIdGSI: input.clientId,
     clientName: client.name,
@@ -221,6 +254,26 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
               ':amount': input.amount,
               ':zero': 0,
               ':lastPayment': now,
+              ':updatedAt': now,
+            },
+            ConditionExpression: 'attribute_exists(PK)',
+          },
+        },
+        {
+          Update: {
+            TableName: CREDIT_NOTES_TABLE,
+            Key: { PK: `org#${orgId}`, SK: `creditnote#${input.creditNoteId}` },
+            UpdateExpression:
+              'SET #paid = :newPaid, #status = :newStatus, #statusGSI = :newStatus, #updatedAt = :updatedAt',
+            ExpressionAttributeNames: {
+              '#paid': 'paid',
+              '#status': 'status',
+              '#statusGSI': 'statusGSI',
+              '#updatedAt': 'updatedAt',
+            },
+            ExpressionAttributeValues: {
+              ':newPaid': newPaid,
+              ':newStatus': newStatus,
               ':updatedAt': now,
             },
             ConditionExpression: 'attribute_exists(PK)',

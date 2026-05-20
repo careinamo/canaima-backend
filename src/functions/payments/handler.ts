@@ -62,6 +62,7 @@ export const listPayments = async (
       status,
       method,
       clientId: q.clientId,
+      creditNoteId: q.creditNoteId,
       page,
       limit,
       sortBy: sortBy as keyof any,
@@ -131,7 +132,11 @@ export const createPayment = async (
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
     if ((e as Error).message.includes('Client not found')) return clientError(404, (e as Error).message);
+    if ((e as Error).message.includes('Credit note not found')) return clientError(404, (e as Error).message);
     if ((e as Error).message.includes('cannot exceed client accumulated debt')) {
+      return clientError(400, (e as Error).message);
+    }
+    if ((e as Error).message.includes('exceeds credit note remaining balance')) {
       return clientError(400, (e as Error).message);
     }
     if ((e as { name?: string }).name === 'TransactionCanceledException') {

@@ -227,6 +227,8 @@ resources:
             AttributeType: S
           - AttributeName: clientIdGSI
             AttributeType: S
+          - AttributeName: creditNoteIdGSI
+            AttributeType: S
           - AttributeName: statusGSI
             AttributeType: S
           - AttributeName: methodGSI
@@ -240,6 +242,12 @@ resources:
           - IndexName: clientIdIndex
             KeySchema:
               - AttributeName: clientIdGSI
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: creditNoteIdIndex
+            KeySchema:
+              - AttributeName: creditNoteIdGSI
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
