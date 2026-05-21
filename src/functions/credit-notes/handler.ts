@@ -50,10 +50,14 @@ export const listCreditNotes = async (
       return clientError(400, `status must be one of: ${VALID_STATUSES.join(', ')}`);
     }
 
+
+    const clientId = q.clientId;
+
     const { items, total } = await repo.listCreditNotes({
       orgId,
       search: q.search,
       status,
+      clientId,
       page,
       limit,
       sortBy: sortBy as keyof CreditNote,

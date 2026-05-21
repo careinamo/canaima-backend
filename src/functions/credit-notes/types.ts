@@ -51,6 +51,7 @@ export interface ListCreditNotesParams {
   orgId: string;
   search?: string;
   status?: CreditNoteStatus;
+  clientId?: string;
   page: number;
   limit: number;
   sortBy: keyof CreditNote;

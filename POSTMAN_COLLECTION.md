@@ -99,10 +99,17 @@ Esto populará la base de datos con datos de ejemplo para ambos módulos.
 GET http://localhost:3000/orgs/org-default/clients?page=1&limit=20
 ```
 
+
 ### Listar notas de crédito
 
 ```
 GET http://localhost:3000/orgs/org-default/credit-notes?page=1&limit=20&status=pending
+```
+
+### Listar notas de crédito por clientId
+
+```
+GET http://localhost:3000/orgs/org-default/credit-notes?clientId=550e8400-e29b-41d4-a716-446655440001&page=1&limit=20
 ```
 
 ### Crear un nuevo cliente

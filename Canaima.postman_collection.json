@@ -237,6 +237,48 @@
           "response": []
         },
         {
+          "name": "List Credit Notes by ClientId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes?clientId={{clientId}}&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes"
+              ],
+              "query": [
+                {
+                  "key": "clientId",
+                  "value": "{{clientId}}",
+                  "description": "Filter by client ID"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Records per page (max: 500)"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of credit notes filtered by clientId for a given organization"
+          },
+          "response": []
+        },
+        {
           "name": "Get Credit Note",
           "request": {
             "method": "GET",

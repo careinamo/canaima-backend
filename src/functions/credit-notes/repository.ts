@@ -89,24 +89,80 @@ export async function getCreditNoteById(orgId: string, noteId: string): Promise<
 export async function listCreditNotes(
   params: ListCreditNotesParams,
 ): Promise<{ items: CreditNote[]; total: number }> {
-  const pk = `org#${params.orgId}`;
+  // If filtering by clientId, use GSI
+  if (params.clientId) {
+    const exprValues: Record<string, unknown> = {
+      ':clientIdGSI': params.clientId,
+    };
+    const exprNames: Record<string, string> = {
+      '#clientIdGSI': 'clientIdGSI',
+    };
+    const filterParts: string[] = [];
+    if (params.status) {
+      filterParts.push('#status = :status');
+      exprNames['#status'] = 'status';
+      exprValues[':status'] = params.status;
+    }
+    if (params.search) {
+      filterParts.push('(contains(numberLower, :search) OR contains(clientName, :search) OR contains(invoiceNumber, :search))');
+      exprValues[':search'] = params.search.toLowerCase();
+    }
+    const queryInput = {
+      TableName: TABLE,
+      IndexName: 'clientIdIndex',
+      KeyConditionExpression: '#clientIdGSI = :clientIdGSI',
+      ExpressionAttributeNames: exprNames,
+      ExpressionAttributeValues: exprValues,
+      ...(filterParts.length > 0 && { FilterExpression: filterParts.join(' AND ') }),
+    };
+    // Query all pages for this client's credit notes
+    const allItems: CreditNote[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+    do {
+      const result = await ddb.send(new QueryCommand({ ...queryInput, ExclusiveStartKey: lastKey }));
+      for (const item of result.Items ?? []) {
+        // Extra check: orgId match (in case GSI is not unique per org)
+        if (item.orgId === params.orgId) {
+          allItems.push(toCreditNote(item));
+        }
+      }
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+    // In-memory sort and pagination
+    const field = params.sortBy as keyof CreditNote;
+    allItems.sort((a, b) => {
+      const aVal = a[field];
+      const bVal = b[field];
+      let cmp: number;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        cmp = aVal.localeCompare(bVal);
+      } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+        cmp = aVal - bVal;
+      } else {
+        cmp = String(aVal ?? '').localeCompare(String(bVal ?? ''));
+      }
+      return params.sortOrder === 'asc' ? cmp : -cmp;
+    });
+    const total = allItems.length;
+    const start = (params.page - 1) * params.limit;
+    return { items: allItems.slice(start, start + params.limit), total };
+  }
 
+  // Default: query all credit notes for org
+  const pk = `org#${params.orgId}`;
   const keyCondition = 'PK = :pk AND begins_with(SK, :skPrefix)';
   const exprValues: Record<string, unknown> = { ':pk': pk, ':skPrefix': 'creditnote#' };
   const exprNames: Record<string, string> = {};
   const filterParts: string[] = [];
-
   if (params.status) {
     filterParts.push('#status = :status');
     exprNames['#status'] = 'status';
     exprValues[':status'] = params.status;
   }
-
   if (params.search) {
     filterParts.push('(contains(numberLower, :search) OR contains(clientName, :search) OR contains(invoiceNumber, :search))');
     exprValues[':search'] = params.search.toLowerCase();
   }
-
   const queryInput = {
     TableName: TABLE,
     KeyConditionExpression: keyCondition,
@@ -114,11 +170,9 @@ export async function listCreditNotes(
     ...(filterParts.length > 0 && { FilterExpression: filterParts.join(' AND ') }),
     ...(Object.keys(exprNames).length > 0 && { ExpressionAttributeNames: exprNames }),
   };
-
   // Query all pages for this org's credit notes, then sort/paginate in-memory.
   const allItems: CreditNote[] = [];
   let lastKey: Record<string, unknown> | undefined;
-
   do {
     const result = await ddb.send(new QueryCommand({ ...queryInput, ExclusiveStartKey: lastKey }));
     for (const item of result.Items ?? []) {
@@ -126,14 +180,12 @@ export async function listCreditNotes(
     }
     lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (lastKey);
-
   // In-memory sort
   const field = params.sortBy as keyof CreditNote;
   allItems.sort((a, b) => {
     const aVal = a[field];
     const bVal = b[field];
     let cmp: number;
-
     if (typeof aVal === 'string' && typeof bVal === 'string') {
       cmp = aVal.localeCompare(bVal);
     } else if (typeof aVal === 'number' && typeof bVal === 'number') {
@@ -141,10 +193,8 @@ export async function listCreditNotes(
     } else {
       cmp = String(aVal ?? '').localeCompare(String(bVal ?? ''));
     }
-
     return params.sortOrder === 'asc' ? cmp : -cmp;
   });
-
   const total = allItems.length;
   const start = (params.page - 1) * params.limit;
   return { items: allItems.slice(start, start + params.limit), total };

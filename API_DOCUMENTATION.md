@@ -486,14 +486,68 @@ Retrieve a paginated list of all credit notes for a given organization.
 | `limit` | number | 20 | Records per page (max: 500) |
 | `search` | string | - | Search term (matches number, client name, or invoice number, case-insensitive) |
 | `status` | string | - | Filter by status: `pending`, `partial`, or `paid` |
+| `clientId` | string | - | Filter credit notes belonging to a specific client (uses DynamoDB `clientIdIndex` GSI) |
 | `sortBy` | string | `createdAt` | Field to sort by |
 | `sortOrder` | string | `asc` | Sort direction: `asc` or `desc` |
 
-**Example Request:**
+**Example Request (all credit notes):**
 
 ```bash
 curl http://localhost:3000/orgs/org-default/credit-notes?page=1\&limit=20\&search=NC-001\&status=pending\&sortBy=amount\&sortOrder=desc
 ```
+
+**Example Request (filter by clientId):**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/credit-notes?clientId=550e8400-e29b-41d4-a716-446655440001&page=1&limit=20"
+```
+
+**Response (200 OK) — filtered by clientId:**
+
+```json
+{
+  "data": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655550001",
+      "number": "NC-001",
+      "orgId": "org-default",
+      "clientId": "550e8400-e29b-41d4-a716-446655440001",
+      "clientName": "Acme Corporation",
+      "invoiceNumber": "INV-2024-001",
+      "amount": 5000,
+      "paid": 0,
+      "status": "pending",
+      "dueDate": "2025-06-12T00:00:00.000Z",
+      "description": "Credit for returned goods",
+      "createdAt": "2025-05-03T00:00:00.000Z",
+      "updatedAt": "2025-05-13T00:00:00.000Z"
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655550002",
+      "number": "NC-002",
+      "orgId": "org-default",
+      "clientId": "550e8400-e29b-41d4-a716-446655440001",
+      "clientName": "Acme Corporation",
+      "invoiceNumber": "INV-2024-015",
+      "amount": 2500,
+      "paid": 2500,
+      "status": "paid",
+      "dueDate": "2025-05-15T00:00:00.000Z",
+      "description": "Early payment discount",
+      "createdAt": "2025-04-30T00:00:00.000Z",
+      "updatedAt": "2025-05-20T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalPages": 1,
+    "totalCount": 2
+  }
+}
+```
+
+> **Note:** When `clientId` is provided, the query uses the `clientIdIndex` DynamoDB GSI for efficient lookup instead of scanning the full organization partition. You can combine it with `status`, `search`, `sortBy`, and `sortOrder` for further filtering.
 
 **Response (200 OK):**
 
