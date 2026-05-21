@@ -463,6 +463,90 @@
           "response": []
         },
         {
+          "name": "List Payments by ClientId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments?clientId={{clientId}}&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "clientId",
+                  "value": "{{clientId}}",
+                  "description": "Filter by client ID (uses clientIdIndex GSI)"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (max: 100)"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of payments filtered by clientId for a given organization"
+          },
+          "response": []
+        },
+        {
+          "name": "List Payments by CreditNoteId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments?creditNoteId={{creditNoteId}}&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "creditNoteId",
+                  "value": "{{creditNoteId}}",
+                  "description": "Filter by credit note ID (uses creditNoteIdIndex GSI)"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (max: 100)"
+                }
+              ]
+            },
+            "description": "Retrieve a paginated list of payments filtered by creditNoteId for a given organization"
+          },
+          "response": []
+        },
+        {
           "name": "Get Payment",
           "request": {
             "method": "GET",

@@ -870,10 +870,22 @@ List all payments for an organization with pagination and filtering.
 | sortBy | string | createdAt | Sort field: createdAt, amount, number, clientName |
 | sortOrder | string | desc | Sort order: asc or desc |
 
-**Example Request:**
+**Example Request (all payments):**
 
 ```bash
 curl "http://localhost:3000/orgs/org-default/payments?page=1&limit=10&status=confirmed&sortBy=amount&sortOrder=desc"
+```
+
+**Example Request (filter by clientId):**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/payments?clientId=550e8400-e29b-41d4-a716-446655440001&page=1&limit=10"
+```
+
+**Example Request (filter by creditNoteId):**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/payments?creditNoteId=660e8400-e29b-41d4-a716-446655550001&page=1&limit=10"
 ```
 
 **Response (200 OK):**
@@ -907,6 +919,8 @@ curl "http://localhost:3000/orgs/org-default/payments?page=1&limit=10&status=con
   }
 }
 ```
+
+> **Note:** `clientId` and `creditNoteId` filters use their respective DynamoDB GSIs (`clientIdIndex` and `creditNoteIdIndex`) for efficient lookup. Both can be combined with `status`, `method`, `search`, `sortBy`, and `sortOrder`.
 
 ---
 
