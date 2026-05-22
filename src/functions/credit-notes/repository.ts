@@ -5,7 +5,6 @@ import {
   PutCommand,
   TransactWriteCommand,
   UpdateCommand,
-  DeleteCommand,
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { CreditNote, CreditNoteRecord, CreateCreditNoteInput, UpdateCreditNoteInput, ListCreditNotesParams } from './types';
@@ -377,13 +376,57 @@ export async function deleteCreditNote(orgId: string, noteId: string): Promise<b
   const key = { PK: `org#${orgId}`, SK: `creditnote#${noteId}` };
 
   try {
-    await ddb.send(
-      new DeleteCommand({
+    const existing = await ddb.send(
+      new GetCommand({
+        TableName: TABLE,
+        Key: key,
+      }),
+    );
+
+    if (!existing.Item) return false;
+
+    const clientId = existing.Item.clientId as string | undefined;
+    const amount = Number(existing.Item.amount ?? 0);
+    const now = new Date().toISOString();
+
+    const transactItems: Array<Record<string, unknown>> = [];
+
+    transactItems.push({
+      Delete: {
         TableName: TABLE,
         Key: key,
         ConditionExpression: 'attribute_exists(PK)',
+      },
+    });
+
+    if (clientId) {
+      transactItems.push({
+        Update: {
+          TableName: CLIENT_TABLE,
+          Key: { PK: `org#${orgId}`, SK: `client#${clientId}` },
+          UpdateExpression:
+            'SET #accumulatedDebt = if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) - :amount, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#accumulatedDebt': 'accumulatedDebt',
+            '#legacyBalance': 'balance',
+            '#updatedAt': 'updatedAt',
+          },
+          ExpressionAttributeValues: {
+            ':amount': amount,
+            ':zero': 0,
+            ':updatedAt': now,
+          },
+          ConditionExpression: 'attribute_exists(PK)',
+        },
+      });
+    }
+
+    await ddb.send(
+      new TransactWriteCommand({
+        TransactItems: transactItems,
       }),
     );
+
     return true;
   } catch (e) {
     if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return false;

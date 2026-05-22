@@ -411,13 +411,112 @@ export async function deletePayment(orgId: string, paymentId: string): Promise<b
   const key = { PK: `org#${orgId}`, SK: `payment#${paymentId}` };
 
   try {
-    await ddb.send(
-      new DeleteCommand({
+    const existing = await ddb.send(
+      new GetCommand({
         TableName: TABLE,
         Key: key,
-        ConditionExpression: 'attribute_exists(PK)',
       }),
     );
+
+    if (!existing.Item) return false;
+
+    const clientId = existing.Item.clientId as string | undefined;
+    const creditNoteId = existing.Item.creditNoteId as string | undefined;
+    const amount = Number(existing.Item.amount ?? 0);
+    const now = new Date().toISOString();
+
+    let creditNoteUpdate:
+      | {
+          Update: {
+            TableName: string;
+            Key: { PK: string; SK: string };
+            UpdateExpression: string;
+            ExpressionAttributeNames: Record<string, string>;
+            ExpressionAttributeValues: Record<string, unknown>;
+            ConditionExpression: string;
+          };
+        }
+      | undefined;
+
+    if (creditNoteId) {
+      const creditNoteResult = await ddb.send(
+        new GetCommand({
+          TableName: CREDIT_NOTES_TABLE,
+          Key: { PK: `org#${orgId}`, SK: `creditnote#${creditNoteId}` },
+        }),
+      );
+
+      if (creditNoteResult.Item) {
+        const creditNoteAmount = Number(creditNoteResult.Item.amount ?? 0);
+        const currentPaid = Number(creditNoteResult.Item.paid ?? 0);
+        const newPaid = Math.max(0, currentPaid - amount);
+        const newStatus = newPaid <= 0 ? 'pending' : newPaid >= creditNoteAmount ? 'paid' : 'partial';
+
+        creditNoteUpdate = {
+          Update: {
+            TableName: CREDIT_NOTES_TABLE,
+            Key: { PK: `org#${orgId}`, SK: `creditnote#${creditNoteId}` },
+            UpdateExpression:
+              'SET #paid = :newPaid, #status = :newStatus, #statusGSI = :newStatus, #updatedAt = :updatedAt',
+            ExpressionAttributeNames: {
+              '#paid': 'paid',
+              '#status': 'status',
+              '#statusGSI': 'statusGSI',
+              '#updatedAt': 'updatedAt',
+            },
+            ExpressionAttributeValues: {
+              ':newPaid': newPaid,
+              ':newStatus': newStatus,
+              ':updatedAt': now,
+            },
+            ConditionExpression: 'attribute_exists(PK)',
+          },
+        };
+      }
+    }
+
+    const transactItems = [
+      {
+        Delete: {
+          TableName: TABLE,
+          Key: key,
+          ConditionExpression: 'attribute_exists(PK)',
+        },
+      },
+    ];
+
+    if (clientId) {
+      transactItems.push({
+        Update: {
+          TableName: CLIENT_TABLE,
+          Key: { PK: `org#${orgId}`, SK: `client#${clientId}` },
+          UpdateExpression:
+            'SET #accumulatedDebt = if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) + :amount, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#accumulatedDebt': 'accumulatedDebt',
+            '#legacyBalance': 'balance',
+            '#updatedAt': 'updatedAt',
+          },
+          ExpressionAttributeValues: {
+            ':amount': amount,
+            ':zero': 0,
+            ':updatedAt': now,
+          },
+          ConditionExpression: 'attribute_exists(PK)',
+        },
+      });
+    }
+
+    if (creditNoteUpdate) {
+      transactItems.push(creditNoteUpdate);
+    }
+
+    await ddb.send(
+      new TransactWriteCommand({
+        TransactItems: transactItems,
+      }),
+    );
+
     return true;
   } catch (e) {
     if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return false;
