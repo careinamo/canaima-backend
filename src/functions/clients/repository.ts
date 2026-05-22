@@ -245,6 +245,12 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
     values[':creditLimit'] = input.creditLimit;
   }
 
+  if (input.accumulatedDebt !== undefined) {
+    sets.push('#accumulatedDebt = :accumulatedDebt');
+    names['#accumulatedDebt'] = 'accumulatedDebt';
+    values[':accumulatedDebt'] = input.accumulatedDebt;
+  }
+
   for (const field of ['phone', 'address', 'notes'] as const) {
     if (field in input) {
       if (input[field] !== undefined) {
@@ -262,14 +268,6 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
   if (removes.length > 0) updateExpression += ` REMOVE ${removes.join(', ')}`;
 
   let conditionExpression = 'attribute_exists(PK)';
-
-  if (input.creditLimit !== undefined) {
-    conditionExpression +=
-      ' AND if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) <= :creditLimit';
-    names['#accumulatedDebt'] = 'accumulatedDebt';
-    names['#legacyBalance'] = 'balance';
-    values[':zero'] = 0;
-  }
 
   try {
     const result = await ddb.send(
@@ -304,15 +302,13 @@ export async function addToAccumulatedDebt(orgId: string, clientId: string, amou
           '#accumulatedDebt': 'accumulatedDebt',
           '#legacyBalance': 'balance',
           '#updatedAt': 'updatedAt',
-          '#creditLimit': 'creditLimit',
         },
         ExpressionAttributeValues: {
           ':amount': amount,
           ':zero': 0,
           ':updatedAt': new Date().toISOString(),
         },
-        ConditionExpression:
-          'attribute_exists(PK) AND if_not_exists(#accumulatedDebt, if_not_exists(#legacyBalance, :zero)) + :amount <= #creditLimit',
+        ConditionExpression: 'attribute_exists(PK)',
         ReturnValues: 'ALL_NEW',
       }),
     );

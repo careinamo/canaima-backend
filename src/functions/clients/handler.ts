@@ -164,6 +164,7 @@ export const updateClient = async (
     return respond(200, client);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
+    console.error('updateClient error:', e);
     return serverError();
   }
 };

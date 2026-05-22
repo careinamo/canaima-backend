@@ -41,6 +41,7 @@ export interface UpdateClientInput {
   address?: string;
   status?: ClientStatus;
   creditLimit?: number;
+  accumulatedDebt?: number;
   notes?: string;
 }
 

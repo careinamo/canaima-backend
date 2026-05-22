@@ -355,6 +355,7 @@ Update one or more fields of an existing client.
 | `address` | string | Physical address |
 | `status` | string | Status: `active`, `inactive`, or `overdue` |
 | `creditLimit` | number | Credit limit amount (≥ 0). **If updated, must be ≥ current `accumulatedDebt`** |
+| `accumulatedDebt` | number | Accumulated debt amount (≥ 0). **If updated, must be ≤ client's `creditLimit`** |
 | `notes` | string | Internal notes |
 
 **Example Request:**
@@ -364,7 +365,8 @@ curl -X PUT http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372-a5
   -H "Content-Type: application/json" \
   -d '{
     "status": "overdue",
-    "creditLimit": 100000
+    "creditLimit": 100000,
+    "accumulatedDebt": 25000
   }'
 ```
 
@@ -380,7 +382,7 @@ curl -X PUT http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372-a5
   "address": "500 Main St, Boston, MA 02101",
   "status": "overdue",
   "creditLimit": 100000,
-  "accumulatedDebt": 0,
+  "accumulatedDebt": 25000,
   "notes": "Referred by Acme Corporation",
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:35:00.000Z"
@@ -1703,6 +1705,7 @@ All endpoints return standardized JSON error responses:
 - **address**: Optional string
 - **status**: Required, one of: `active`, `inactive`, `overdue`
 - **creditLimit**: Required, non-negative number (cannot be set below current `accumulatedDebt`)
+- **accumulatedDebt**: Optional (update only), non-negative number (cannot exceed `creditLimit`)
 - **notes**: Optional string
 
 ### Credit Note Validation Rules

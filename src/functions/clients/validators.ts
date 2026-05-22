@@ -84,6 +84,14 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
     result.creditLimit = creditLimit;
   }
 
+  if ('accumulatedDebt' in input) {
+    const debt = Number(input.accumulatedDebt);
+    if (isNaN(debt) || debt < 0) {
+      throw new ValidationError('accumulatedDebt must be a non-negative number');
+    }
+    result.accumulatedDebt = debt;
+  }
+
   if ('phone' in input) result.phone = input.phone ? String(input.phone).trim() : undefined;
   if ('address' in input) result.address = input.address ? String(input.address).trim() : undefined;
   if ('notes' in input) result.notes = input.notes ? String(input.notes).trim() : undefined;
