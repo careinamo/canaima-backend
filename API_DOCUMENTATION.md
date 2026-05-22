@@ -162,6 +162,7 @@ The Clients module provides REST API endpoints for managing B2B client accounts 
 | **POST** | `/orgs/{orgId}/clients` | `createClient` | Create a new client | 201, 400, 409 |
 | **PUT** | `/orgs/{orgId}/clients/{id}` | `updateClient` | Update an existing client | 200, 400, 404, 409 |
 | **DELETE** | `/orgs/{orgId}/clients/{id}` | `deleteClient` | Delete a client | 200, 404 |
+| **POST** | `/orgs/{orgId}/clients/bulk-import` | `bulkImportClients` | Import multiple clients from CSV (max 50) | 202, 400 |
 
 ---
 
@@ -443,6 +444,161 @@ curl -X DELETE http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372
 **Error Responses:**
 
 - **404 Not Found**: Client with the given ID does not exist
+
+---
+
+### 6. POST /orgs/{orgId}/clients/bulk-import — Bulk Import Clients
+
+Import multiple clients at once from a CSV file. Maximum of 50 clients per request.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+
+**Request Body:**
+
+Plain text CSV content with the following format:
+- **Header row required** with column names: `name`, `email`, and optionally: `phone`, `address`, `status`, `creditLimit`, `notes`
+- One client per line
+- Columns separated by commas
+- Maximum 50 data rows (excluding header)
+
+**CSV Format Example:**
+
+```csv
+name,email,phone,address,status,creditLimit,notes
+Acme Corp,contact@acme.com,+1-555-0100,123 Main St,active,50000,Key account
+Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,active,75000,Referred by Acme
+Global Traders,sales@global.com,+1-555-0102,789 Pine Rd,inactive,30000,On hold
+```
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3000/orgs/org-default/clients/bulk-import \
+  -H "Content-Type: text/plain" \
+  --data-binary @clients.csv
+```
+
+Or inline:
+
+```bash
+curl -X POST http://localhost:3000/orgs/org-default/clients/bulk-import \
+  -H "Content-Type: text/plain" \
+  -d "name,email,phone,address,status,creditLimit,notes
+Acme Corp,contact@acme.com,+1-555-0100,123 Main St,active,50000,Key account
+Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,active,75000,Referred"
+```
+
+**Response (202 Accepted):**
+
+```json
+{
+  "summary": {
+    "totalRows": 2,
+    "validRows": 2,
+    "createdCount": 2,
+    "failedCount": 0
+  },
+  "created": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "orgId": "org-default",
+      "name": "Acme Corp",
+      "email": "contact@acme.com",
+      "phone": "+1-555-0100",
+      "address": "123 Main St",
+      "status": "active",
+      "creditLimit": 50000,
+      "accumulatedDebt": 0,
+      "notes": "Key account",
+      "createdAt": "2025-05-13T14:30:00.000Z",
+      "updatedAt": "2025-05-13T14:30:00.000Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "orgId": "org-default",
+      "name": "Tech Solutions",
+      "email": "info@techsol.com",
+      "phone": "+1-555-0101",
+      "address": "456 Oak Ave",
+      "status": "active",
+      "creditLimit": 75000,
+      "accumulatedDebt": 0,
+      "notes": "Referred",
+      "createdAt": "2025-05-13T14:30:00.000Z",
+      "updatedAt": "2025-05-13T14:30:00.000Z"
+    }
+  ],
+  "errors": []
+}
+```
+
+**Response (202 Accepted) — With Errors:**
+
+When some rows fail validation but others succeed:
+
+```json
+{
+  "summary": {
+    "totalRows": 3,
+    "validRows": 2,
+    "createdCount": 1,
+    "failedCount": 2
+  },
+  "created": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "orgId": "org-default",
+      "name": "Acme Corp",
+      "email": "contact@acme.com",
+      "phone": "+1-555-0100",
+      "address": "123 Main St",
+      "status": "active",
+      "creditLimit": 50000,
+      "accumulatedDebt": 0,
+      "notes": "Key account",
+      "createdAt": "2025-05-13T14:30:00.000Z",
+      "updatedAt": "2025-05-13T14:30:00.000Z"
+    }
+  ],
+  "errors": [
+    {
+      "rowNumber": 2,
+      "error": "email format is invalid"
+    },
+    {
+      "rowNumber": 3,
+      "error": "Email already exists"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: CSV parsing error (missing header, malformed CSV, etc.)
+- **400 Bad Request**: No valid rows to import (all rows failed validation)
+
+**Validation Rules:**
+
+- `name` and `email` are required columns
+- `name` must not be empty
+- `email` must be in valid email format (XXX@XXX.XXX)
+- `email` must be unique across the organization (checked against existing clients and duplicates within the batch)
+- `status` must be one of: `active`, `inactive`, `overdue` (defaults to `active` if omitted)
+- `creditLimit` must be a non-negative number (defaults to 0 if omitted)
+- `phone`, `address`, and `notes` are optional
+
+**Partial Success Handling:**
+
+The endpoint uses an all-or-nothing approach per row:
+- Valid rows are created immediately
+- Invalid rows are reported in the `errors` array with detailed error messages
+- The response always returns 202 (Accepted) if at least one row is valid
+- The `summary` object shows exactly how many succeeded and how many failed
 
 ---
 

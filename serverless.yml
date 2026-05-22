@@ -106,6 +106,14 @@ functions:
           method: DELETE
           cors: true
 
+  bulkImportClients:
+    handler: src/functions/clients/handler.bulkImportClients
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/clients/bulk-import
+          method: POST
+          cors: true
+
   # Credit Notes endpoints
   listCreditNotes:
     handler: src/functions/credit-notes/handler.listCreditNotes

@@ -172,6 +172,36 @@
             "description": "Delete a client account"
           },
           "response": []
+        },
+        {
+          "name": "Bulk Import Clients",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "name,email,phone,address,status,creditLimit,notes\nAcme Corp,contact@acme.com,+1-555-0100,123 Main St,active,50000,Key account\nTech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,active,75000,Referred by Acme\nGlobal Traders,sales@global.com,+1-555-0102,789 Pine Rd,inactive,30000,On hold"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/bulk-import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients",
+                "bulk-import"
+              ]
+            },
+            "description": "Import multiple clients from CSV file (max 50 clients per request). Send CSV content as plain text in the request body."
+          },
+          "response": []
         }
       ]
     },

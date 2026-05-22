@@ -90,3 +90,68 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
 
   return result;
 }
+
+/**
+ * Parse and validate a CSV string with client data.
+ * Expected format: CSV with header row
+ * Columns: name, email, phone, address, status, creditLimit, notes
+ * Maximum 50 rows allowed.
+ */
+export interface ParsedCsvRow {
+  data: CreateClientInput;
+  rowNumber: number;
+}
+
+export interface CsvParseResult {
+  valid: ParsedCsvRow[];
+  errors: Array<{ rowNumber: number; error: string }>;
+}
+
+export function parseCsvClients(csvContent: string): CsvParseResult {
+  const lines = csvContent.trim().split('\n');
+  
+  if (lines.length < 2) {
+    throw new ValidationError('CSV must have header row and at least one data row');
+  }
+
+  const headerLine = lines[0];
+  const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
+  
+  // Validate header
+  const requiredHeaders = ['name', 'email'];
+  for (const required of requiredHeaders) {
+    if (!headers.includes(required)) {
+      throw new ValidationError(`CSV must include '${required}' column`);
+    }
+  }
+
+  const valid: ParsedCsvRow[] = [];
+  const errors: Array<{ rowNumber: number; error: string }> = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue; // Skip empty lines
+
+    if (valid.length >= 50) {
+      errors.push({ rowNumber: i + 1, error: 'Maximum 50 clients allowed per import' });
+      continue;
+    }
+
+    const cells = line.split(',').map(cell => cell.trim());
+    const row: Record<string, string> = {};
+
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = cells[j] || '';
+    }
+
+    try {
+      const clientInput = validateCreateClient(row);
+      valid.push({ data: clientInput, rowNumber: i + 1 });
+    } catch (e) {
+      const message = e instanceof ValidationError ? e.message : 'Unknown error';
+      errors.push({ rowNumber: i + 1, error: message });
+    }
+  }
+
+  return { valid, errors };
+}

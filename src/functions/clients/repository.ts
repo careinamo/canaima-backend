@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -126,7 +127,7 @@ export async function listClients(
 
 export async function createClient(orgId: string, input: CreateClientInput): Promise<Client> {
   const now = new Date().toISOString();
-  const clientId = crypto.randomUUID();
+  const clientId = randomUUID();
 
   const record: ClientRecord = {
     PK: `org#${orgId}`,
@@ -149,6 +150,66 @@ export async function createClient(orgId: string, input: CreateClientInput): Pro
 
   await ddb.send(new PutCommand({ TableName: TABLE, Item: record }));
   return toClient(record as unknown as Record<string, unknown>);
+}
+
+/**
+ * Create multiple clients in batch.
+ * Returns array with successful clients and errors.
+ */
+export async function createClientsBatch(
+  orgId: string,
+  inputs: CreateClientInput[],
+): Promise<{ created: Client[]; errors: Array<{ email: string; error: string }> }> {
+  const created: Client[] = [];
+  const errors: Array<{ email: string; error: string }> = [];
+  const now = new Date().toISOString();
+
+  // Check for duplicate emails across the batch and in DB
+  const emailsInBatch = new Set<string>();
+  for (const input of inputs) {
+    if (emailsInBatch.has(input.email)) {
+      errors.push({ email: input.email, error: 'Duplicate email in batch' });
+      continue;
+    }
+    emailsInBatch.add(input.email);
+
+    try {
+      // Check if email already exists in DB
+      const existing = await findClientByEmail(input.email);
+      if (existing) {
+        errors.push({ email: input.email, error: 'Email already exists' });
+        continue;
+      }
+
+      const clientId = randomUUID();
+      const record: ClientRecord = {
+        PK: `org#${orgId}`,
+        SK: `client#${clientId}`,
+        id: clientId,
+        orgId,
+        name: input.name,
+        nameLower: input.name.toLowerCase(),
+        email: input.email,
+        emailLower: input.email.toLowerCase(),
+        phone: input.phone,
+        address: input.address,
+        status: input.status,
+        creditLimit: input.creditLimit,
+        accumulatedDebt: 0,
+        notes: input.notes,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await ddb.send(new PutCommand({ TableName: TABLE, Item: record }));
+      created.push(toClient(record as unknown as Record<string, unknown>));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      errors.push({ email: input.email, error: message });
+    }
+  }
+
+  return { created, errors };
 }
 
 export async function updateClient(orgId: string, clientId: string, input: UpdateClientInput): Promise<Client | null> {

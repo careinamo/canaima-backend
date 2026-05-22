@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { ValidationError, validateCreateClient, validateUpdateClient } from './validators';
+import { ValidationError, validateCreateClient, validateUpdateClient, parseCsvClients } from './validators';
 import * as repo from './repository';
 import type { ClientStatus } from './types';
 
@@ -187,6 +187,53 @@ export const deleteClient = async (
     return respond(200, { success: true, message: 'Client deleted' });
   } catch (error) {
     console.error('deleteClient error:', error);
+    return serverError();
+  }
+};
+
+// ---------------------------------------------------------------------------
+// POST /orgs/{orgId}/clients/bulk-import
+// ---------------------------------------------------------------------------
+
+export const bulkImportClients = async (
+  event: APIGatewayProxyEventV2,
+): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const orgId = event.pathParameters?.orgId;
+    if (!orgId) return clientError(400, 'Missing orgId');
+
+    const csvContent = event.body ?? '';
+    if (!csvContent.trim()) {
+      return clientError(400, 'Request body (CSV content) is required');
+    }
+
+    // Parse and validate CSV
+    const parseResult = parseCsvClients(csvContent);
+
+    if (parseResult.valid.length === 0) {
+      return respond(400, {
+        error: 'No valid rows to import',
+        csvErrors: parseResult.errors,
+      });
+    }
+
+    // Create clients in batch
+    const inputs = parseResult.valid.map(row => row.data);
+    const result = await repo.createClientsBatch(orgId, inputs);
+
+    return respond(202, {
+      summary: {
+        totalRows: parseResult.valid.length + parseResult.errors.length,
+        validRows: parseResult.valid.length,
+        createdCount: result.created.length,
+        failedCount: result.errors.length,
+      },
+      created: result.created,
+      errors: [...parseResult.errors, ...result.errors],
+    });
+  } catch (e) {
+    if (e instanceof ValidationError) return clientError(400, e.message);
+    console.error('bulkImportClients error:', e);
     return serverError();
   }
 };
