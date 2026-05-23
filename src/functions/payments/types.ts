@@ -16,6 +16,7 @@ export interface Payment {
   reference?: string;
   description?: string;
   clientAccumulatedDebtAtRecord: number;
+  clientCreditLimitAtRecord: number;
   createdAt: string;
   updatedAt: string;
 }

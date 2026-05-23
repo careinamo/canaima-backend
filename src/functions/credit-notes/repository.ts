@@ -240,6 +240,7 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     dueDate: input.dueDate,
     description: input.description,
     clientAccumulatedDebtAtRecord: newDebt,
+    clientCreditLimitAtRecord: client.creditLimit,
     createdAt: now,
     updatedAt: now,
   };
@@ -303,13 +304,14 @@ export async function updateCreditNote(
     throw new Error('Client not found in organization');
   }
 
-  const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord'];
+  const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord = :clientCreditLimitAtRecord'];
   const removes: string[] = [];
   const values: Record<string, unknown> = { 
     ':updatedAt': new Date().toISOString(),
     ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
+    ':clientCreditLimitAtRecord': client.creditLimit,
   };
-  const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord' };
+  const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord': 'clientCreditLimitAtRecord' };
 
   if (input.number !== undefined) {
     sets.push('#number = :number', '#numberLower = :numberLower');

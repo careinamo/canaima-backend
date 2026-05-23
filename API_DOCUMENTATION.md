@@ -694,6 +694,7 @@ curl "http://localhost:3000/orgs/org-default/credit-notes?clientId=550e8400-e29b
       "dueDate": "2025-05-15T00:00:00.000Z",
       "description": "Early payment discount",
       "clientAccumulatedDebtAtRecord": 7500,
+      "clientCreditLimitAtRecord": 50000,
       "createdAt": "2025-04-30T00:00:00.000Z",
       "updatedAt": "2025-05-20T00:00:00.000Z"
     }
@@ -727,6 +728,7 @@ curl "http://localhost:3000/orgs/org-default/credit-notes?clientId=550e8400-e29b
       "dueDate": "2025-06-12T00:00:00.000Z",
       "description": "Credit for returned goods",
       "clientAccumulatedDebtAtRecord": 5000,
+      "clientCreditLimitAtRecord": 50000,
       "createdAt": "2025-05-03T00:00:00.000Z",
       "updatedAt": "2025-05-13T00:00:00.000Z"
     }
@@ -845,6 +847,7 @@ curl -X POST http://localhost:3000/orgs/org-default/credit-notes \
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
   "clientAccumulatedDebtAtRecord": 5000,
+  "clientCreditLimitAtRecord": 50000,
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:30:00.000Z"
 }
@@ -944,6 +947,7 @@ curl -X PUT http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
   "clientAccumulatedDebtAtRecord": 5000,
+  "clientCreditLimitAtRecord": 50000,
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:35:00.000Z"
 }
@@ -1074,6 +1078,7 @@ curl "http://localhost:3000/orgs/org-default/payments?creditNoteId=660e8400-e29b
       "reference": "REF-89012",
       "description": "Payment for invoice April",
       "clientAccumulatedDebtAtRecord": 2500,
+      "clientCreditLimitAtRecord": 50000,
       "createdAt": "2026-05-03T12:30:00.000Z",
       "updatedAt": "2026-05-03T12:30:00.000Z"
     }
@@ -1126,6 +1131,7 @@ curl "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-44
   "reference": "REF-89012",
   "description": "Payment for invoice April",
   "clientAccumulatedDebtAtRecord": 2500,
+  "clientCreditLimitAtRecord": 50000,
   "createdAt": "2026-05-03T12:30:00.000Z",
   "updatedAt": "2026-05-03T12:30:00.000Z"
 }
@@ -1201,6 +1207,7 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
   "reference": "REF-89012",
   "description": "Payment for invoice April",
   "clientAccumulatedDebtAtRecord": 2500,
+  "clientCreditLimitAtRecord": 50000,
   "createdAt": "2026-05-13T14:30:00.000Z",
   "updatedAt": "2026-05-13T14:30:00.000Z"
 }
@@ -1318,6 +1325,7 @@ curl -X PUT "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-
   "reference": "REF-89012",
   "description": "Payment confirmed",
   "clientAccumulatedDebtAtRecord": 2500,
+  "clientCreditLimitAtRecord": 50000,
   "createdAt": "2026-05-13T14:30:00.000Z",
   "updatedAt": "2026-05-13T14:35:00.000Z"
 }
@@ -1494,6 +1502,7 @@ The Credit Notes table follows the same single-table design pattern as the Clien
 | `dueDate` | String | ISO 8601 timestamp | Payment/application due date |
 | `description` | String | Reason or notes for the credit | Optional |
 | `clientAccumulatedDebtAtRecord` | Number | Client's accumulated debt after transaction | Audit/history field |
+| `clientCreditLimitAtRecord` | Number | Client's credit limit at transaction time | Audit/history field |
 | `createdAt` | String | ISO 8601 timestamp of creation | Auto-generated |
 | `updatedAt` | String | ISO 8601 timestamp of last update | Auto-updated |
 
@@ -1534,6 +1543,7 @@ The Credit Notes table follows the same single-table design pattern as the Clien
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
   "clientAccumulatedDebtAtRecord": 5000,
+  "clientCreditLimitAtRecord": 50000,
   "createdAt": "2025-05-03T00:00:00.000Z",
   "updatedAt": "2025-05-13T00:00:00.000Z"
 }
@@ -1585,6 +1595,7 @@ For sequential note number generation:
 | `reference` | String | Reference/voucher (optional) | - |
 | `description` | String | Notes (optional) | - |
 | `clientAccumulatedDebtAtRecord` | Number | Client's accumulated debt after transaction | Audit/history field |
+| `clientCreditLimitAtRecord` | Number | Client's credit limit at transaction time | Audit/history field |
 | `createdAt` | String | ISO 8601 timestamp | Auto-generated |
 | `updatedAt` | String | ISO 8601 timestamp | Auto-updated |
 

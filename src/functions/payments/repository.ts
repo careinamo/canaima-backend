@@ -228,6 +228,7 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     reference: input.reference,
     description: input.description,
     clientAccumulatedDebtAtRecord: clientAccumulatedDebtAfterPayment,
+    clientCreditLimitAtRecord: client.creditLimit,
     createdAt: now,
     updatedAt: now,
   };
@@ -309,13 +310,14 @@ export async function updatePayment(orgId: string, paymentId: string, input: Upd
     throw new Error('Client not found in organization');
   }
 
-  const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord'];
+  const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord = :clientCreditLimitAtRecord'];
   const removes: string[] = [];
   const values: Record<string, unknown> = { 
     ':updatedAt': new Date().toISOString(),
     ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
+    ':clientCreditLimitAtRecord': client.creditLimit,
   };
-  const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord' };
+  const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord': 'clientCreditLimitAtRecord' };
 
   if (input.number !== undefined) {
     sets.push('#number = :number', '#numberLower = :numberLower');
