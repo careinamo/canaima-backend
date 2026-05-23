@@ -12,6 +12,7 @@ export interface CreditNote {
   status: CreditNoteStatus;
   dueDate: string;
   description?: string;
+  clientAccumulatedDebtAtRecord: number;
   createdAt: string;
   updatedAt: string;
 }

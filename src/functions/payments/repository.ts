@@ -203,6 +203,9 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     paymentNumber = `AB-${String(counter).padStart(3, '0')}`;
   }
 
+  // Calculate the accumulated debt AFTER this payment is processed
+  const clientAccumulatedDebtAfterPayment = client.accumulatedDebt - input.amount;
+
   const record: PaymentRecord = {
     PK: `org#${orgId}`,
     SK: `payment#${paymentId}`,
@@ -224,6 +227,7 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     bankName: input.bankName,
     reference: input.reference,
     description: input.description,
+    clientAccumulatedDebtAtRecord: clientAccumulatedDebtAfterPayment,
     createdAt: now,
     updatedAt: now,
   };
@@ -289,10 +293,29 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
 export async function updatePayment(orgId: string, paymentId: string, input: UpdatePaymentInput): Promise<Payment | null> {
   const key = { PK: `org#${orgId}`, SK: `payment#${paymentId}` };
 
-  const sets: string[] = ['#updatedAt = :updatedAt'];
+  // Get existing record to determine clientId for debt lookup
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: TABLE,
+      Key: key,
+    }),
+  );
+
+  if (!existing.Item) return null;
+
+  const clientId = input.clientId || (existing.Item.clientId as string);
+  const client = await clientRepo.getClientById(orgId, clientId);
+  if (!client) {
+    throw new Error('Client not found in organization');
+  }
+
+  const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord'];
   const removes: string[] = [];
-  const values: Record<string, unknown> = { ':updatedAt': new Date().toISOString() };
-  const names: Record<string, string> = { '#updatedAt': 'updatedAt' };
+  const values: Record<string, unknown> = { 
+    ':updatedAt': new Date().toISOString(),
+    ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
+  };
+  const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord' };
 
   if (input.number !== undefined) {
     sets.push('#number = :number', '#numberLower = :numberLower');
@@ -306,11 +329,11 @@ export async function updatePayment(orgId: string, paymentId: string, input: Upd
     // Resolve new client name
     let clientName = input.clientId;
     try {
-      const client = await clientRepo.getClientById(orgId, input.clientId);
-      if (!client) {
+      const clientData = await clientRepo.getClientById(orgId, input.clientId);
+      if (!clientData) {
         throw new Error(`Client not found: ${input.clientId}`);
       }
-      clientName = client.name;
+      clientName = clientData.name;
     } catch (e) {
       throw new Error(`Client not found in organization: ${input.clientId}`);
     }

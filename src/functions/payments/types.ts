@@ -15,6 +15,7 @@ export interface Payment {
   bankName?: string;
   reference?: string;
   description?: string;
+  clientAccumulatedDebtAtRecord: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -239,6 +239,7 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     statusGSI: input.status || 'pending',
     dueDate: input.dueDate,
     description: input.description,
+    clientAccumulatedDebtAtRecord: newDebt,
     createdAt: now,
     updatedAt: now,
   };
@@ -286,10 +287,29 @@ export async function updateCreditNote(
 ): Promise<CreditNote | null> {
   const key = { PK: `org#${orgId}`, SK: `creditnote#${noteId}` };
 
-  const sets: string[] = ['#updatedAt = :updatedAt'];
+  // Get existing record to determine clientId for debt lookup
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: TABLE,
+      Key: key,
+    }),
+  );
+
+  if (!existing.Item) return null;
+
+  const clientId = input.clientId || (existing.Item.clientId as string);
+  const client = await clientRepo.getClientById(orgId, clientId);
+  if (!client) {
+    throw new Error('Client not found in organization');
+  }
+
+  const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord'];
   const removes: string[] = [];
-  const values: Record<string, unknown> = { ':updatedAt': new Date().toISOString() };
-  const names: Record<string, string> = { '#updatedAt': 'updatedAt' };
+  const values: Record<string, unknown> = { 
+    ':updatedAt': new Date().toISOString(),
+    ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
+  };
+  const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord' };
 
   if (input.number !== undefined) {
     sets.push('#number = :number', '#numberLower = :numberLower');

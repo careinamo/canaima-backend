@@ -677,6 +677,7 @@ curl "http://localhost:3000/orgs/org-default/credit-notes?clientId=550e8400-e29b
       "status": "pending",
       "dueDate": "2025-06-12T00:00:00.000Z",
       "description": "Credit for returned goods",
+      "clientAccumulatedDebtAtRecord": 5000,
       "createdAt": "2025-05-03T00:00:00.000Z",
       "updatedAt": "2025-05-13T00:00:00.000Z"
     },
@@ -692,6 +693,7 @@ curl "http://localhost:3000/orgs/org-default/credit-notes?clientId=550e8400-e29b
       "status": "paid",
       "dueDate": "2025-05-15T00:00:00.000Z",
       "description": "Early payment discount",
+      "clientAccumulatedDebtAtRecord": 7500,
       "createdAt": "2025-04-30T00:00:00.000Z",
       "updatedAt": "2025-05-20T00:00:00.000Z"
     }
@@ -724,6 +726,7 @@ curl "http://localhost:3000/orgs/org-default/credit-notes?clientId=550e8400-e29b
       "status": "pending",
       "dueDate": "2025-06-12T00:00:00.000Z",
       "description": "Credit for returned goods",
+      "clientAccumulatedDebtAtRecord": 5000,
       "createdAt": "2025-05-03T00:00:00.000Z",
       "updatedAt": "2025-05-13T00:00:00.000Z"
     }
@@ -771,6 +774,7 @@ curl http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716
   "status": "pending",
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
+  "clientAccumulatedDebtAtRecord": 5000,
   "createdAt": "2025-05-03T00:00:00.000Z",
   "updatedAt": "2025-05-13T00:00:00.000Z"
 }
@@ -807,6 +811,8 @@ Create a new credit note for a client within an organization.
 | `dueDate` | string | ✓ | Due date in ISO 8601 format |
 | `description` | string | - | Reason or description of the credit |
 
+**Note:** The response includes `clientAccumulatedDebtAtRecord` (the client's accumulated debt after this credit note was created). This is an audit/history field automatically populated by the system and should not be included in requests.
+
 **Example Request (Success):**
 
 ```bash
@@ -838,6 +844,7 @@ curl -X POST http://localhost:3000/orgs/org-default/credit-notes \
   "status": "pending",
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
+  "clientAccumulatedDebtAtRecord": 5000,
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:30:00.000Z"
 }
@@ -936,6 +943,7 @@ curl -X PUT http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41
   "status": "partial",
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
+  "clientAccumulatedDebtAtRecord": 5000,
   "createdAt": "2025-05-13T14:30:00.000Z",
   "updatedAt": "2025-05-13T14:35:00.000Z"
 }
@@ -1065,6 +1073,7 @@ curl "http://localhost:3000/orgs/org-default/payments?creditNoteId=660e8400-e29b
       "bankName": "Banco Provincial",
       "reference": "REF-89012",
       "description": "Payment for invoice April",
+      "clientAccumulatedDebtAtRecord": 2500,
       "createdAt": "2026-05-03T12:30:00.000Z",
       "updatedAt": "2026-05-03T12:30:00.000Z"
     }
@@ -1116,6 +1125,7 @@ curl "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-44
   "bankName": "Banco Provincial",
   "reference": "REF-89012",
   "description": "Payment for invoice April",
+  "clientAccumulatedDebtAtRecord": 2500,
   "createdAt": "2026-05-03T12:30:00.000Z",
   "updatedAt": "2026-05-03T12:30:00.000Z"
 }
@@ -1153,6 +1163,8 @@ Create a new payment.
 | reference | string | - | Transaction/voucher reference |
 | description | string | - | Notes or observations |
 
+**Note:** The response includes `clientAccumulatedDebtAtRecord` (the client's accumulated debt after this payment was processed). This is an audit/history field automatically populated by the system and should not be included in requests.
+
 **Example Request (Success):**
 
 ```bash
@@ -1188,6 +1200,7 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
   "bankName": "Banco Provincial",
   "reference": "REF-89012",
   "description": "Payment for invoice April",
+  "clientAccumulatedDebtAtRecord": 2500,
   "createdAt": "2026-05-13T14:30:00.000Z",
   "updatedAt": "2026-05-13T14:30:00.000Z"
 }
@@ -1304,6 +1317,7 @@ curl -X PUT "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-
   "bankName": "Banco Provincial",
   "reference": "REF-89012",
   "description": "Payment confirmed",
+  "clientAccumulatedDebtAtRecord": 2500,
   "createdAt": "2026-05-13T14:30:00.000Z",
   "updatedAt": "2026-05-13T14:35:00.000Z"
 }
@@ -1479,6 +1493,7 @@ The Credit Notes table follows the same single-table design pattern as the Clien
 | `statusGSI` | String | Copy of status for GSI queries | For status-based filtering |
 | `dueDate` | String | ISO 8601 timestamp | Payment/application due date |
 | `description` | String | Reason or notes for the credit | Optional |
+| `clientAccumulatedDebtAtRecord` | Number | Client's accumulated debt after transaction | Audit/history field |
 | `createdAt` | String | ISO 8601 timestamp of creation | Auto-generated |
 | `updatedAt` | String | ISO 8601 timestamp of last update | Auto-updated |
 
@@ -1518,6 +1533,7 @@ The Credit Notes table follows the same single-table design pattern as the Clien
   "statusGSI": "pending",
   "dueDate": "2025-06-12T00:00:00.000Z",
   "description": "Credit for returned goods",
+  "clientAccumulatedDebtAtRecord": 5000,
   "createdAt": "2025-05-03T00:00:00.000Z",
   "updatedAt": "2025-05-13T00:00:00.000Z"
 }
@@ -1568,6 +1584,7 @@ For sequential note number generation:
 | `bankName` | String | Bank name (optional) | - |
 | `reference` | String | Reference/voucher (optional) | - |
 | `description` | String | Notes (optional) | - |
+| `clientAccumulatedDebtAtRecord` | Number | Client's accumulated debt after transaction | Audit/history field |
 | `createdAt` | String | ISO 8601 timestamp | Auto-generated |
 | `updatedAt` | String | ISO 8601 timestamp | Auto-updated |
 
