@@ -3,6 +3,7 @@ import { ValidationError, validateCreateCreditNote, validateUpdateCreditNote } f
 import * as repo from './repository';
 import { CreditLimitExceededError } from './repository';
 import type { CreditNote, CreditNoteStatus } from './types';
+import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -123,6 +124,12 @@ export const createCreditNote = async (
     const input = validateCreateCreditNote(body);
 
     const creditNote = await repo.createCreditNote(orgId, input);
+    
+    // Trigger credit usage calculation asynchronously
+    triggerCreditUsageCalculation(orgId).catch(err => 
+      console.warn('Failed to trigger credit usage calculation:', err)
+    );
+
     return respond(201, creditNote);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -170,6 +177,11 @@ export const updateCreditNote = async (
     const creditNote = await repo.updateCreditNote(orgId, id, input);
     if (!creditNote) return clientError(404, 'Credit note not found');
 
+    // Trigger credit usage calculation asynchronously
+    triggerCreditUsageCalculation(orgId).catch(err => 
+      console.warn('Failed to trigger credit usage calculation:', err)
+    );
+
     return respond(200, creditNote);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -193,6 +205,11 @@ export const deleteCreditNote = async (
 
     const deleted = await repo.deleteCreditNote(orgId, id);
     if (!deleted) return clientError(404, 'Credit note not found');
+
+    // Trigger credit usage calculation asynchronously
+    triggerCreditUsageCalculation(orgId).catch(err => 
+      console.warn('Failed to trigger credit usage calculation:', err)
+    );
 
     return respond(200, { success: true, message: 'Credit note deleted' });
   } catch (error) {

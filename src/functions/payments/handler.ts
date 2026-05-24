@@ -2,6 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import { ValidationError, validateCreatePayment, validateUpdatePayment } from './validators';
 import * as repo from './repository';
 import type { PaymentMethod, PaymentStatus } from './types';
+import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -128,6 +129,12 @@ export const createPayment = async (
     const input = validateCreatePayment(body);
 
     const payment = await repo.createPayment(orgId, input);
+    
+    // Trigger credit usage calculation asynchronously
+    triggerCreditUsageCalculation(orgId).catch(err => 
+      console.warn('Failed to trigger credit usage calculation:', err)
+    );
+
     return respond(201, payment);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -172,6 +179,11 @@ export const updatePayment = async (
     const payment = await repo.updatePayment(orgId, id, input);
     if (!payment) return clientError(404, 'Payment not found');
 
+    // Trigger credit usage calculation asynchronously
+    triggerCreditUsageCalculation(orgId).catch(err => 
+      console.warn('Failed to trigger credit usage calculation:', err)
+    );
+
     return respond(200, payment);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -196,6 +208,11 @@ export const deletePayment = async (
 
     const deleted = await repo.deletePayment(orgId, id);
     if (!deleted) return clientError(404, 'Payment not found');
+
+    // Trigger credit usage calculation asynchronously
+    triggerCreditUsageCalculation(orgId).catch(err => 
+      console.warn('Failed to trigger credit usage calculation:', err)
+    );
 
     return respond(200, { success: true, message: 'Payment deleted' });
   } catch (error) {

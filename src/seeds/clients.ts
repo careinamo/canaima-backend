@@ -123,6 +123,24 @@ const seedClients = [
     createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
     updatedAt: new Date().toISOString(),
   },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440007',
+    orgId: ORG_ID,
+    PK: `org#${ORG_ID}`,
+    SK: 'client#550e8400-e29b-41d4-a716-446655440007',
+    name: 'StartUp Ventures Inc',
+    email: 'contact@startupventures.com',
+    nameLower: 'startup ventures inc',
+    emailLower: 'contact@startupventures.com',
+    phone: '+1-555-0106',
+    address: '987 Innovation Park, Austin, TX 78701',
+    status: 'active' as const,
+    creditLimit: 60000,
+    accumulatedDebt: 0,
+    notes: 'New client without any credit notes or payments yet',
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 async function seed() {

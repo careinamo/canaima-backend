@@ -13,6 +13,7 @@ provider:
     TABLE_CLIENTS: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
     TABLE_CREDIT_NOTES: ${env:TABLE_CREDIT_NOTES_BASE, 'credit-notes'}-${self:provider.stage}
     TABLE_PAYMENTS: ${env:TABLE_PAYMENTS_BASE, 'payments'}-${self:provider.stage}
+    TABLE_METRICS: ${env:TABLE_METRICS_BASE, 'metrics'}-${self:provider.stage}
   httpApi:
     cors:
       allowedOrigins:
@@ -41,6 +42,13 @@ provider:
             - !Sub "${CreditNotesTable.Arn}/index/*"
             - !GetAtt PaymentsTable.Arn
             - !Sub "${PaymentsTable.Arn}/index/*"
+            - !GetAtt MetricsTable.Arn
+            - !Sub "${MetricsTable.Arn}/index/*"
+        - Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource:
+            - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-calculateCreditUsageEvent*"
 
 plugins:
   - serverless-offline
@@ -196,6 +204,19 @@ functions:
           method: DELETE
           cors: true
 
+  # Credit Usage calculation - scheduled every 24 hours
+  calculateCreditUsageScheduled:
+    handler: src/functions/credit-usage/handler.scheduleHandler
+    events:
+      - schedule:
+          rate: cron(0 0 * * ? *)  # Every day at 00:00 UTC
+          input:
+            orgIds: ${env:ORG_IDS, 'org-default'}
+
+  # Credit Usage calculation - event-driven (called from credit-notes/payments)
+  calculateCreditUsageEvent:
+    handler: src/functions/credit-usage/handler.eventDrivenHandler
+
 resources:
   Resources:
     ClientsTable:
@@ -304,3 +325,19 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
+
+    MetricsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_METRICS_BASE, 'metrics'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
