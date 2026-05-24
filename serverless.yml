@@ -8,13 +8,13 @@ provider:
   runtime: nodejs24.x
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
-  environment:
-    NODE_ENV: ${self:provider.stage}
-    TABLE_CLIENTS: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
-    TABLE_CREDIT_NOTES: ${env:TABLE_CREDIT_NOTES_BASE, 'credit-notes'}-${self:provider.stage}
-    TABLE_PAYMENTS: ${env:TABLE_PAYMENTS_BASE, 'payments'}-${self:provider.stage}
-    TABLE_METRICS: ${env:TABLE_METRICS_BASE, 'metrics'}-${self:provider.stage}
   httpApi:
+    authorizers:
+      clerkJwt:
+        type: lambda
+        functionArn: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-clerkAuthorizer"
+        identitySource: $request.header.Authorization
+        enableSimpleResponses: true
     cors:
       allowedOrigins:
         - '*'
@@ -24,6 +24,21 @@ provider:
         - '*'
       exposedHeaders:
         - '*'
+  environment:
+    NODE_ENV: ${self:provider.stage}
+    # Existing tables
+    TABLE_CLIENTS: ${env:TABLE_CLIENTS_BASE, 'clients'}-${self:provider.stage}
+    TABLE_CREDIT_NOTES: ${env:TABLE_CREDIT_NOTES_BASE, 'credit-notes'}-${self:provider.stage}
+    TABLE_PAYMENTS: ${env:TABLE_PAYMENTS_BASE, 'payments'}-${self:provider.stage}
+    TABLE_METRICS: ${env:TABLE_METRICS_BASE, 'metrics'}-${self:provider.stage}
+    # New tables
+    TABLE_ORGANIZATIONS: ${env:TABLE_ORGANIZATIONS_BASE, 'organizations'}-${self:provider.stage}
+    TABLE_USERS: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
+    TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
+    # Clerk configuration
+    CLERK_WEBHOOK_SECRET: ${env:CLERK_WEBHOOK_SECRET}
+    CLERK_JWKS_URL: ${env:CLERK_JWKS_URL}
+    CLERK_ISSUER: ${env:CLERK_ISSUER}
   iam:
     role:
       statements:
@@ -44,6 +59,12 @@ provider:
             - !Sub "${PaymentsTable.Arn}/index/*"
             - !GetAtt MetricsTable.Arn
             - !Sub "${MetricsTable.Arn}/index/*"
+            - !GetAtt OrganizationsTable.Arn
+            - !Sub "${OrganizationsTable.Arn}/index/*"
+            - !GetAtt UsersTable.Arn
+            - !Sub "${UsersTable.Arn}/index/*"
+            - !GetAtt WebhookEventsTable.Arn
+            - !Sub "${WebhookEventsTable.Arn}/index/*"
         - Effect: Allow
           Action:
             - lambda:InvokeFunction
@@ -65,6 +86,13 @@ package:
   individually: true
 
 functions:
+  # Authorization
+  clerkAuthorizer:
+    handler: src/functions/shared/clerk-authorizer.handler
+    environment:
+      JWKS_CACHE_TTL: '3600'
+
+  # Hello endpoint
   hello:
     handler: src/functions/hello/handler.main
     events:
@@ -73,7 +101,7 @@ functions:
           method: GET
           cors: true
 
-  # Clients endpoints
+  # ===== Clients endpoints =====
   listClients:
     handler: src/functions/clients/handler.listClients
     events:
@@ -81,6 +109,7 @@ functions:
           path: /orgs/{orgId}/clients
           method: GET
           cors: true
+          authorizer: clerkJwt
 
   getClient:
     handler: src/functions/clients/handler.getClient
@@ -89,6 +118,7 @@ functions:
           path: /orgs/{orgId}/clients/{id}
           method: GET
           cors: true
+          authorizer: clerkJwt
 
   createClient:
     handler: src/functions/clients/handler.createClient
@@ -97,6 +127,7 @@ functions:
           path: /orgs/{orgId}/clients
           method: POST
           cors: true
+          authorizer: clerkJwt
 
   updateClient:
     handler: src/functions/clients/handler.updateClient
@@ -105,6 +136,7 @@ functions:
           path: /orgs/{orgId}/clients/{id}
           method: PUT
           cors: true
+          authorizer: clerkJwt
 
   deleteClient:
     handler: src/functions/clients/handler.deleteClient
@@ -113,6 +145,7 @@ functions:
           path: /orgs/{orgId}/clients/{id}
           method: DELETE
           cors: true
+          authorizer: clerkJwt
 
   bulkImportClients:
     handler: src/functions/clients/handler.bulkImportClients
@@ -121,8 +154,9 @@ functions:
           path: /orgs/{orgId}/clients/bulk-import
           method: POST
           cors: true
+          authorizer: clerkJwt
 
-  # Credit Notes endpoints
+  # ===== Credit Notes endpoints =====
   listCreditNotes:
     handler: src/functions/credit-notes/handler.listCreditNotes
     events:
@@ -130,6 +164,7 @@ functions:
           path: /orgs/{orgId}/credit-notes
           method: GET
           cors: true
+          authorizer: clerkJwt
 
   getCreditNote:
     handler: src/functions/credit-notes/handler.getCreditNote
@@ -138,6 +173,7 @@ functions:
           path: /orgs/{orgId}/credit-notes/{id}
           method: GET
           cors: true
+          authorizer: clerkJwt
 
   createCreditNote:
     handler: src/functions/credit-notes/handler.createCreditNote
@@ -146,6 +182,7 @@ functions:
           path: /orgs/{orgId}/credit-notes
           method: POST
           cors: true
+          authorizer: clerkJwt
 
   updateCreditNote:
     handler: src/functions/credit-notes/handler.updateCreditNote
@@ -154,6 +191,7 @@ functions:
           path: /orgs/{orgId}/credit-notes/{id}
           method: PUT
           cors: true
+          authorizer: clerkJwt
 
   deleteCreditNote:
     handler: src/functions/credit-notes/handler.deleteCreditNote
@@ -162,8 +200,9 @@ functions:
           path: /orgs/{orgId}/credit-notes/{id}
           method: DELETE
           cors: true
+          authorizer: clerkJwt
 
-  # Payments endpoints
+  # ===== Payments endpoints =====
   listPayments:
     handler: src/functions/payments/handler.listPayments
     events:
@@ -171,6 +210,7 @@ functions:
           path: /orgs/{orgId}/payments
           method: GET
           cors: true
+          authorizer: clerkJwt
 
   getPayment:
     handler: src/functions/payments/handler.getPayment
@@ -179,6 +219,7 @@ functions:
           path: /orgs/{orgId}/payments/{id}
           method: GET
           cors: true
+          authorizer: clerkJwt
 
   createPayment:
     handler: src/functions/payments/handler.createPayment
@@ -187,6 +228,7 @@ functions:
           path: /orgs/{orgId}/payments
           method: POST
           cors: true
+          authorizer: clerkJwt
 
   updatePayment:
     handler: src/functions/payments/handler.updatePayment
@@ -195,6 +237,7 @@ functions:
           path: /orgs/{orgId}/payments/{id}
           method: PUT
           cors: true
+          authorizer: clerkJwt
 
   deletePayment:
     handler: src/functions/payments/handler.deletePayment
@@ -203,22 +246,106 @@ functions:
           path: /orgs/{orgId}/payments/{id}
           method: DELETE
           cors: true
+          authorizer: clerkJwt
 
-  # Credit Usage calculation - scheduled every 24 hours
+  # ===== Credit Usage calculation =====
   calculateCreditUsageScheduled:
     handler: src/functions/credit-usage/handler.scheduleHandler
     events:
       - schedule:
-          rate: cron(0 0 * * ? *)  # Every day at 00:00 UTC
+          rate: cron(0 0 * * ? *)
           input:
             orgIds: ${env:ORG_IDS, 'org-default'}
 
-  # Credit Usage calculation - event-driven (called from credit-notes/payments)
   calculateCreditUsageEvent:
     handler: src/functions/credit-usage/handler.eventDrivenHandler
 
+  # ===== Organizations endpoints =====
+  listUserOrganizations:
+    handler: src/functions/organizations/handler.listUserOrganizations
+    events:
+      - httpApi:
+          path: /users/me/organizations
+          method: GET
+          cors: true
+          authorizer: clerkJwt
+
+  getOrganization:
+    handler: src/functions/organizations/handler.getOrganization
+    events:
+      - httpApi:
+          path: /organizations/{orgId}
+          method: GET
+          cors: true
+          authorizer: clerkJwt
+
+  createOrganization:
+    handler: src/functions/organizations/handler.createOrganization
+    events:
+      - httpApi:
+          path: /organizations
+          method: POST
+          cors: true
+          authorizer: clerkJwt
+
+  updateOrganization:
+    handler: src/functions/organizations/handler.updateOrganization
+    events:
+      - httpApi:
+          path: /organizations/{orgId}
+          method: PATCH
+          cors: true
+          authorizer: clerkJwt
+
+  listOrganizationMembers:
+    handler: src/functions/organizations/handler.listOrganizationMembers
+    events:
+      - httpApi:
+          path: /organizations/{orgId}/members
+          method: GET
+          cors: true
+          authorizer: clerkJwt
+
+  # ===== Users endpoints =====
+  getCurrentUser:
+    handler: src/functions/users/handler.getCurrentUser
+    events:
+      - httpApi:
+          path: /users/me
+          method: GET
+          cors: true
+          authorizer: clerkJwt
+
+  updateCurrentUser:
+    handler: src/functions/users/handler.updateCurrentUser
+    events:
+      - httpApi:
+          path: /users/me
+          method: PATCH
+          cors: true
+          authorizer: clerkJwt
+
+  getUser:
+    handler: src/functions/users/handler.getUser
+    events:
+      - httpApi:
+          path: /users/{userId}
+          method: GET
+          cors: true
+          authorizer: clerkJwt
+
+  # ===== Webhooks =====
+  clerkWebhook:
+    handler: src/functions/webhooks/clerk/handler.main
+    events:
+      - httpApi:
+          path: /webhooks/clerk
+          method: POST
+          cors: true
+
 resources:
   Resources:
+    # ===== Existing Tables =====
     ClientsTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -341,3 +468,68 @@ resources:
             KeyType: HASH
           - AttributeName: SK
             KeyType: RANGE
+
+    # ===== New Tables =====
+    OrganizationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_ORGANIZATIONS_BASE, 'organizations'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+
+    WebhookEventsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
