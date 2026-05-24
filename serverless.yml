@@ -109,7 +109,6 @@ functions:
           path: /orgs/{orgId}/clients
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   getClient:
     handler: src/functions/clients/handler.getClient
@@ -118,7 +117,6 @@ functions:
           path: /orgs/{orgId}/clients/{id}
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   createClient:
     handler: src/functions/clients/handler.createClient
@@ -127,7 +125,6 @@ functions:
           path: /orgs/{orgId}/clients
           method: POST
           cors: true
-          authorizer: clerkJwt
 
   updateClient:
     handler: src/functions/clients/handler.updateClient
@@ -136,7 +133,6 @@ functions:
           path: /orgs/{orgId}/clients/{id}
           method: PUT
           cors: true
-          authorizer: clerkJwt
 
   deleteClient:
     handler: src/functions/clients/handler.deleteClient
@@ -145,7 +141,6 @@ functions:
           path: /orgs/{orgId}/clients/{id}
           method: DELETE
           cors: true
-          authorizer: clerkJwt
 
   bulkImportClients:
     handler: src/functions/clients/handler.bulkImportClients
@@ -154,7 +149,6 @@ functions:
           path: /orgs/{orgId}/clients/bulk-import
           method: POST
           cors: true
-          authorizer: clerkJwt
 
   # ===== Credit Notes endpoints =====
   listCreditNotes:
@@ -164,7 +158,6 @@ functions:
           path: /orgs/{orgId}/credit-notes
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   getCreditNote:
     handler: src/functions/credit-notes/handler.getCreditNote
@@ -173,7 +166,6 @@ functions:
           path: /orgs/{orgId}/credit-notes/{id}
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   createCreditNote:
     handler: src/functions/credit-notes/handler.createCreditNote
@@ -182,7 +174,6 @@ functions:
           path: /orgs/{orgId}/credit-notes
           method: POST
           cors: true
-          authorizer: clerkJwt
 
   updateCreditNote:
     handler: src/functions/credit-notes/handler.updateCreditNote
@@ -191,7 +182,6 @@ functions:
           path: /orgs/{orgId}/credit-notes/{id}
           method: PUT
           cors: true
-          authorizer: clerkJwt
 
   deleteCreditNote:
     handler: src/functions/credit-notes/handler.deleteCreditNote
@@ -200,7 +190,6 @@ functions:
           path: /orgs/{orgId}/credit-notes/{id}
           method: DELETE
           cors: true
-          authorizer: clerkJwt
 
   # ===== Payments endpoints =====
   listPayments:
@@ -210,7 +199,6 @@ functions:
           path: /orgs/{orgId}/payments
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   getPayment:
     handler: src/functions/payments/handler.getPayment
@@ -219,7 +207,6 @@ functions:
           path: /orgs/{orgId}/payments/{id}
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   createPayment:
     handler: src/functions/payments/handler.createPayment
@@ -228,7 +215,6 @@ functions:
           path: /orgs/{orgId}/payments
           method: POST
           cors: true
-          authorizer: clerkJwt
 
   updatePayment:
     handler: src/functions/payments/handler.updatePayment
@@ -237,7 +223,6 @@ functions:
           path: /orgs/{orgId}/payments/{id}
           method: PUT
           cors: true
-          authorizer: clerkJwt
 
   deletePayment:
     handler: src/functions/payments/handler.deletePayment
@@ -246,7 +231,6 @@ functions:
           path: /orgs/{orgId}/payments/{id}
           method: DELETE
           cors: true
-          authorizer: clerkJwt
 
   # ===== Credit Usage calculation =====
   calculateCreditUsageScheduled:
@@ -268,7 +252,6 @@ functions:
           path: /users/me/organizations
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   getOrganization:
     handler: src/functions/organizations/handler.getOrganization
@@ -277,7 +260,6 @@ functions:
           path: /organizations/{orgId}
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   createOrganization:
     handler: src/functions/organizations/handler.createOrganization
@@ -286,7 +268,6 @@ functions:
           path: /organizations
           method: POST
           cors: true
-          authorizer: clerkJwt
 
   updateOrganization:
     handler: src/functions/organizations/handler.updateOrganization
@@ -295,7 +276,6 @@ functions:
           path: /organizations/{orgId}
           method: PATCH
           cors: true
-          authorizer: clerkJwt
 
   listOrganizationMembers:
     handler: src/functions/organizations/handler.listOrganizationMembers
@@ -304,7 +284,6 @@ functions:
           path: /organizations/{orgId}/members
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   # ===== Users endpoints =====
   getCurrentUser:
@@ -314,7 +293,6 @@ functions:
           path: /users/me
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   updateCurrentUser:
     handler: src/functions/users/handler.updateCurrentUser
@@ -323,7 +301,6 @@ functions:
           path: /users/me
           method: PATCH
           cors: true
-          authorizer: clerkJwt
 
   getUser:
     handler: src/functions/users/handler.getUser
@@ -332,7 +309,6 @@ functions:
           path: /users/{userId}
           method: GET
           cors: true
-          authorizer: clerkJwt
 
   # ===== Webhooks =====
   clerkWebhook:
