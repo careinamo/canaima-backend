@@ -1,22 +1,22 @@
-import type { APIGatewayProxyEventV2WithLambdaAuthorizer, APIGatewayProxyResultV2 } from 'aws-lambda';
+import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import * as repo from './repository';
 import { createOrganizationSchema, updateOrganizationSchema } from './validators';
-import { getAuth } from '../shared/auth';
 import { HttpError, toErrorResponse } from '../shared/errors';
 
 class OrganizationError extends HttpError {}
 
 /**
  * GET /users/me/organizations
- * List all organizations for the authenticated user
+ * List all organizations (public endpoint)
  */
 export async function listUserOrganizations(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const { userId } = getAuth(event);
-
-    const orgs = await repo.listOrgsByUser(userId);
+    // For now, return empty list or all orgs
+    // TODO: When auth is re-enabled, extract userId from JWT
+    const userId = event.queryStringParameters?.userId || '';
+    const orgs = userId ? await repo.listOrgsByUser(userId) : [];
 
     return {
       statusCode: 200,
@@ -31,24 +31,16 @@ export async function listUserOrganizations(
 
 /**
  * GET /organizations/{orgId}
- * Get organization metadata and members
+ * Get organization metadata (public endpoint)
  */
 export async function getOrganization(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const { userId } = getAuth(event);
     const clerkOrgId = event.pathParameters?.orgId;
 
     if (!clerkOrgId) {
       throw new OrganizationError(400, 'Missing orgId');
-    }
-
-    // Verify user belongs to this org
-    const members = await repo.listMembers(clerkOrgId);
-    const isMember = members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new OrganizationError(403, 'Not a member of this organization');
     }
 
     const org = await repo.getOrg(clerkOrgId);
@@ -69,13 +61,12 @@ export async function getOrganization(
 
 /**
  * POST /organizations
- * Create or upsert organization (called after Clerk createOrganization)
+ * Create or upsert organization (public endpoint)
  */
 export async function createOrganization(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const { userId } = getAuth(event);
     const body = JSON.parse(event.body || '{}');
 
     const validated = createOrganizationSchema.parse(body);
@@ -85,7 +76,7 @@ export async function createOrganization(
       name: validated.name,
       teamSize: validated.teamSize,
       currency: validated.currency,
-      createdBy: userId,
+      createdBy: validated.createdBy || 'anonymous',
     });
 
     return {
@@ -107,27 +98,16 @@ export async function createOrganization(
 
 /**
  * PATCH /organizations/{orgId}
- * Update organization (admin only)
+ * Update organization (public endpoint - TODO: add auth when re-enabled)
  */
 export async function updateOrganization(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const { userId } = getAuth(event);
     const clerkOrgId = event.pathParameters?.orgId;
 
     if (!clerkOrgId) {
       throw new OrganizationError(400, 'Missing orgId');
-    }
-
-    // Verify user is admin
-    const members = await repo.listMembers(clerkOrgId);
-    const userMembership = members.find((m) => m.userId === userId);
-    if (!userMembership) {
-      throw new OrganizationError(403, 'Not a member of this organization');
-    }
-    if (userMembership.role !== 'admin') {
-      throw new OrganizationError(403, 'Only admins can update organization');
     }
 
     const body = JSON.parse(event.body || '{}');
@@ -154,25 +134,19 @@ export async function updateOrganization(
 
 /**
  * GET /organizations/{orgId}/members
- * List all members of an organization
+ * List all members of an organization (public endpoint)
  */
 export async function listOrganizationMembers(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const { userId } = getAuth(event);
     const clerkOrgId = event.pathParameters?.orgId;
 
     if (!clerkOrgId) {
       throw new OrganizationError(400, 'Missing orgId');
     }
 
-    // Verify user belongs to this org
     const members = await repo.listMembers(clerkOrgId);
-    const isMember = members.some((m) => m.userId === userId);
-    if (!isMember) {
-      throw new OrganizationError(403, 'Not a member of this organization');
-    }
 
     return {
       statusCode: 200,

@@ -1,21 +1,24 @@
-import type { APIGatewayProxyEventV2WithLambdaAuthorizer, APIGatewayProxyResultV2 } from 'aws-lambda';
+import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { z } from 'zod';
 import * as repo from './repository';
 import { updateUserProfileSchema } from './validators';
-import { getAuth } from '../shared/auth';
 import { HttpError, toErrorResponse } from '../shared/errors';
 
 class UserError extends HttpError {}
 
 /**
  * GET /users/me
- * Get current authenticated user profile
+ * Get user profile (accepts userId as query parameter)
  */
 export async function getCurrentUser(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const { userId } = getAuth(event);
+    const userId = event.queryStringParameters?.userId;
+
+    if (!userId) {
+      throw new UserError(400, 'Missing userId parameter');
+    }
 
     const user = await repo.getUser(userId);
     if (!user) {
@@ -35,13 +38,18 @@ export async function getCurrentUser(
 
 /**
  * PATCH /users/me
- * Update current user profile
+ * Update user profile (accepts userId as query parameter)
  */
 export async function updateCurrentUser(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const { userId } = getAuth(event);
+    const userId = event.queryStringParameters?.userId;
+
+    if (!userId) {
+      throw new UserError(400, 'Missing userId parameter');
+    }
+
     const body = JSON.parse(event.body || '{}');
 
     const validated = updateUserProfileSchema.parse(body);
@@ -67,10 +75,10 @@ export async function updateCurrentUser(
 
 /**
  * GET /users/{userId}
- * Get user profile (public, only if shares organization)
+ * Get user profile (public endpoint)
  */
 export async function getUser(
-  event: APIGatewayProxyEventV2WithLambdaAuthorizer<any>,
+  event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
     const userId = event.pathParameters?.userId;

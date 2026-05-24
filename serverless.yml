@@ -9,12 +9,6 @@ provider:
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   httpApi:
-    authorizers:
-      clerkJwt:
-        type: lambda
-        functionArn: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-clerkAuthorizer"
-        identitySource: $request.header.Authorization
-        enableSimpleResponses: true
     cors:
       allowedOrigins:
         - '*'
@@ -35,10 +29,6 @@ provider:
     TABLE_ORGANIZATIONS: ${env:TABLE_ORGANIZATIONS_BASE, 'organizations'}-${self:provider.stage}
     TABLE_USERS: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
-    # Clerk configuration
-    CLERK_WEBHOOK_SECRET: ${env:CLERK_WEBHOOK_SECRET}
-    CLERK_JWKS_URL: ${env:CLERK_JWKS_URL}
-    CLERK_ISSUER: ${env:CLERK_ISSUER}
   iam:
     role:
       statements:
@@ -86,12 +76,6 @@ package:
   individually: true
 
 functions:
-  # Authorization
-  clerkAuthorizer:
-    handler: src/functions/shared/clerk-authorizer.handler
-    environment:
-      JWKS_CACHE_TTL: '3600'
-
   # Hello endpoint
   hello:
     handler: src/functions/hello/handler.main
