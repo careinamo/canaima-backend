@@ -1,7 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import type { Organization, OrganizationMember, ListOrgsByUserResult } from './types';
-import { v4 as uuidv4 } from 'uuid';
 
 const TABLE = process.env.TABLE_ORGANIZATIONS as string;
 

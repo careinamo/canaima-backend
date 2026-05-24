@@ -1,4 +1,5 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { z } from 'zod';
 import * as repo from './repository';
 import { createOrganizationSchema, updateOrganizationSchema } from './validators';
 import { HttpError, toErrorResponse } from '../shared/errors';
@@ -76,7 +77,7 @@ export async function createOrganization(
       name: validated.name,
       teamSize: validated.teamSize,
       currency: validated.currency,
-      createdBy: validated.createdBy || 'anonymous',
+      createdBy: 'anonymous',
     });
 
     return {
@@ -158,5 +159,3 @@ export async function listOrganizationMembers(
     return toErrorResponse(error);
   }
 }
-
-import { z } from 'zod';

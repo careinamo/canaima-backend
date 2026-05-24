@@ -1,7 +1,7 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { verifySvixSignature } from './verify';
-import * as usersRepo from '../users/repository';
-import * as orgsRepo from '../organizations/repository';
+import * as usersRepo from '../../users/repository';
+import * as orgsRepo from '../../organizations/repository';
 import { recordWebhookEvent, hasProcessedEvent } from './webhook-events';
 
 const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -22,7 +22,7 @@ export async function main(event: APIGatewayProxyEventV2): Promise<APIGatewayPro
     );
 
     // Verify Svix signature
-    if (!verifySvixSignature(body, headers, WEBHOOK_SECRET)) {
+    if (!verifySvixSignature(body, headers, WEBHOOK_SECRET as string)) {
       console.warn('Invalid Svix signature');
       return {
         statusCode: 401,
@@ -31,11 +31,19 @@ export async function main(event: APIGatewayProxyEventV2): Promise<APIGatewayPro
     }
 
     const payload = JSON.parse(body);
-    const eventId = payload.id;
+    const eventId: string | undefined = payload.id;
     const eventType = payload.type;
 
+    if (!eventId) {
+      console.warn('Missing event id in webhook payload');
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing event id' }),
+      };
+    }
+
     // Check for duplicate (idempotency)
-    if (await hasProcessedEvent(eventId)) {
+    if (await hasProcessedEvent(eventId as string)) {
       console.log(`Event ${eventId} already processed, skipping`);
       return {
         statusCode: 200,
