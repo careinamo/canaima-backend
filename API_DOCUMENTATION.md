@@ -25,11 +25,18 @@ src/
 │   │   ├── repository.ts   # DynamoDB operations
 │   │   ├── validators.ts   # Input validation
 │   │   └── types.ts        # TypeScript interfaces
-│   └── payments/           # Payments module
-│       ├── handler.ts      # Route handlers (5 endpoints)
-│       ├── repository.ts   # DynamoDB operations
-│       ├── validators.ts   # Input validation
-│       └── types.ts        # TypeScript interfaces
+│   ├── payments/           # Payments module
+│   │   ├── handler.ts      # Route handlers (5 endpoints)
+│   │   ├── repository.ts   # DynamoDB operations
+│   │   ├── validators.ts   # Input validation
+│   │   └── types.ts        # TypeScript interfaces
+│   ├── credit-usage/       # Credit Usage metrics module
+│   │   ├── handler.ts      # Scheduled and event-driven handlers
+│   │   ├── repository.ts   # Metrics calculations and storage
+│   │   ├── types.ts        # TypeScript interfaces for metrics
+│   │   └── validators.ts   # Input validation
+│   └── shared/
+│       └── credit-usage-trigger.ts  # Utility to trigger credit usage calculation
 └── seeds/
     ├── clients.ts          # Database seed data for clients
     ├── credit-notes.ts     # Database seed data for credit notes
@@ -46,16 +53,20 @@ Create a `.env` file in the project root:
 TABLE_CLIENTS_BASE=clientsaaa
 TABLE_CREDIT_NOTES_BASE=credit-notes
 TABLE_PAYMENTS_BASE=payments
+TABLE_METRICS=metrics
 AWS_REGION=us-east-2
 SEED_ORG_ID=org-default
+ORG_IDS=org-default
 ```
 
 **Variables:**
 - `TABLE_CLIENTS_BASE`: Base name for the clients table (stage is appended: `clientsaaa-dev`, `clientsaaa-prod`)
 - `TABLE_CREDIT_NOTES_BASE`: Base name for the credit notes table (stage is appended: `credit-notes-dev`, `credit-notes-prod`)
 - `TABLE_PAYMENTS_BASE`: Base name for the payments table (stage is appended: `payments-dev`, `payments-prod`)
+- `TABLE_METRICS`: Base name for the metrics table (stage is appended: `metrics-dev`, `metrics-prod`)
 - `AWS_REGION`: AWS region for DynamoDB connection
 - `SEED_ORG_ID`: Organization ID used by the seed script
+- `ORG_IDS`: Comma-separated list of organization IDs to process in the scheduled credit usage calculation
 
 ---
 
@@ -1796,6 +1807,278 @@ The system uses **DynamoDB TransactWriteCommand** for all debt modifications to 
 ```
 
 All three transactions are atomic: all operations succeed or all are rolled back, ensuring the client's `accumulatedDebt` and the credit note's `paid` field stay in sync.
+
+---
+
+## Credit Usage Metrics
+
+### Overview
+
+The Credit Usage module calculates and tracks the percentage of credit utilized by each organization. It monitors how much of the total available credit limit is being used by active clients across an organization, providing key business intelligence metrics.
+
+**Formula:**
+```
+Credit Used Percentage = (Total Accumulated Debt / Total Credit Limit) × 100
+```
+
+### Metrics Table
+
+A dedicated DynamoDB table stores credit usage records:
+
+- **Table Name**: `metrics-{stage}` (e.g., `metrics-dev`, `metrics-prod`)
+- **Billing Mode**: PAY_PER_REQUEST (serverless, scales automatically)
+- **Partition Key (PK)**: `CreditUsed#{orgId}` — Enables per-organization queries
+- **Sort Key (SK)**: `YYYY-MM-DD` — ISO date format for daily snapshots
+
+### Record Structure
+
+Each metrics record contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `PK` | string | Partition key: `CreditUsed#{orgId}` |
+| `SK` | string | Sort key: Date in `YYYY-MM-DD` format |
+| `orgId` | string | Organization ID |
+| `value` | number | Credit usage percentage (0-100, max 2 decimals) |
+| `totalAccumulatedDebt` | number | Sum of all accumulated debt from active clients |
+| `totalCreditLimit` | number | Sum of all credit limits from active clients |
+| `activeClientsCount` | number | Number of active clients included in calculation |
+| `createdAt` | string | ISO 8601 timestamp when record was created |
+| `updatedAt` | string | ISO 8601 timestamp when record was last updated |
+
+**Example Record:**
+```json
+{
+  "PK": "CreditUsed#org-default",
+  "SK": "2025-05-13",
+  "orgId": "org-default",
+  "value": 45.50,
+  "totalAccumulatedDebt": 227500,
+  "totalCreditLimit": 500000,
+  "activeClientsCount": 25,
+  "createdAt": "2025-05-13T00:00:00.000Z",
+  "updatedAt": "2025-05-13T00:00:00.000Z"
+}
+```
+
+### Calculation Process
+
+The credit usage calculation includes the following logic:
+
+1. **Active Clients Only**: Query all clients with `status = "active"` for the organization
+2. **Aggregate Totals**:
+   - Sum all `accumulatedDebt` values
+   - Sum all `creditLimit` values
+   - Count active clients
+3. **Calculate Percentage**: `(totalAccumulatedDebt / totalCreditLimit) × 100`
+   - If `totalCreditLimit = 0`, percentage defaults to `0`
+   - Results are rounded to 2 decimal places
+4. **Store Record**: Save calculated metrics to the metrics table with today's date as the SK
+
+### Execution Modes
+
+The credit usage calculation runs in **two modes**:
+
+#### 1. Scheduled Execution (Daily)
+
+**Trigger**: EventBridge cron schedule every 24 hours at 0:00 UTC  
+**Cron Expression**: `cron(0 0 * * ? *)`  
+**Function Name**: `calculateCreditUsageScheduled`
+
+- Automatically processes all organizations specified in the `ORG_IDS` environment variable
+- Creates a daily snapshot at midnight UTC
+- Non-blocking and does not affect API responses
+
+**Configuration in serverless.yml:**
+```yaml
+calculateCreditUsageScheduled:
+  handler: src/functions/credit-usage/handler.scheduleHandler
+  events:
+    - schedule:
+        rate: cron(0 0 * * ? *)
+        input:
+          orgIds: ${env:ORG_IDS}
+```
+
+**Environment Variable:**
+```env
+ORG_IDS=org-default,org-partner1,org-partner2
+```
+
+#### 2. Event-Driven Execution (Real-time)
+
+**Triggers**: Automatically invoked after any of these operations:
+- Credit note created, updated, or deleted
+- Payment created, updated, or deleted
+
+**Function Name**: `calculateCreditUsageEvent`
+
+- Asynchronous Lambda-to-Lambda invocation
+- Recalculates metrics immediately when debt changes
+- Does not block the API response (fire-and-forget)
+
+**How It Works:**
+1. When a credit note or payment is modified, the API handler completes the transaction
+2. After success, the handler calls `triggerCreditUsageCalculation(orgId)` 
+3. This invokes the credit usage Lambda asynchronously
+4. The event handler updates the current day's metrics record
+
+### Obtaining Metrics
+
+#### Getting the Latest Metric for an Organization
+
+To retrieve the most recent credit usage metric, query the metrics table:
+
+**Query Parameters:**
+- **PK**: `CreditUsed#{orgId}`
+- **ScanIndexForward**: `false` (descending order to get latest first)
+- **Limit**: `1`
+
+**DynamoDB Query Example (using AWS SDK):**
+```javascript
+const result = await ddb.send(
+  new QueryCommand({
+    TableName: 'metrics-dev',
+    KeyConditionExpression: 'PK = :pk',
+    ExpressionAttributeValues: {
+      ':pk': 'CreditUsed#org-default',
+    },
+    ScanIndexForward: false,
+    Limit: 1,
+  }),
+);
+const latestMetric = result.Items?.[0];
+```
+
+**Expected Response:**
+```json
+{
+  "PK": "CreditUsed#org-default",
+  "SK": "2025-05-13",
+  "orgId": "org-default",
+  "value": 45.50,
+  "totalAccumulatedDebt": 227500,
+  "totalCreditLimit": 500000,
+  "activeClientsCount": 25,
+  "createdAt": "2025-05-13T00:00:00.000Z",
+  "updatedAt": "2025-05-13T00:00:00.000Z"
+}
+```
+
+#### Getting Historical Metrics for a Date Range
+
+To retrieve multiple metrics across dates, use a date range query:
+
+**Query Parameters:**
+- **PK**: `CreditUsed#{orgId}`
+- **SK Between**: `YYYY-MM-DD` range (e.g., `2025-05-01` to `2025-05-31`)
+
+**DynamoDB Query Example:**
+```javascript
+const result = await ddb.send(
+  new QueryCommand({
+    TableName: 'metrics-dev',
+    KeyConditionExpression: 'PK = :pk AND SK BETWEEN :startDate AND :endDate',
+    ExpressionAttributeValues: {
+      ':pk': 'CreditUsed#org-default',
+      ':startDate': '2025-05-01',
+      ':endDate': '2025-05-31',
+    },
+  }),
+);
+const metrics = result.Items; // Array of records sorted by date ascending
+```
+
+### Implementation Details
+
+#### Source Code Structure
+
+```
+src/functions/credit-usage/
+├── handler.ts          # Main Lambda handlers (scheduled and event-driven)
+├── repository.ts       # DynamoDB queries and data operations
+├── types.ts            # TypeScript interfaces for metrics
+└── validators.ts       # Input validation (if needed)
+
+src/functions/shared/
+└── credit-usage-trigger.ts  # Utility to invoke credit-usage Lambda
+```
+
+#### Key Functions
+
+**handler.ts:**
+- `calculateCreditUsageForOrg(orgId)` — Main calculation function
+- `scheduleHandler(event)` — EventBridge scheduled trigger handler
+- `eventDrivenHandler(event)` — Lambda invocation handler
+
+**repository.ts:**
+- `getActiveClientsForOrg(orgId)` — Queries active clients from clients table
+- `calculateCreditUsage(orgId)` — Computes percentage and totals
+- `saveCreditUsageRecord(orgId, usage)` — Stores result in metrics table
+- `getLatestCreditUsage(orgId)` — Retrieves most recent record
+
+**shared/credit-usage-trigger.ts:**
+- `triggerCreditUsageCalculation(orgId)` — Asynchronously invokes event-driven handler
+
+#### Integration with Existing Modules
+
+**Credit Notes Handler** (`src/functions/credit-notes/handler.ts`):
+- After `POST /credit-notes` (create) → Triggers calculation
+- After `PUT /credit-notes/{id}` (update) → Triggers calculation
+- After `DELETE /credit-notes/{id}` (delete) → Triggers calculation
+
+**Payments Handler** (`src/functions/payments/handler.ts`):
+- After `POST /payments` (create) → Triggers calculation
+- After `PUT /payments/{id}` (update) → Triggers calculation
+- After `DELETE /payments/{id}` (delete) → Triggers calculation
+
+#### Environment Variables
+
+Add to `.env`:
+```env
+TABLE_METRICS=metrics
+ORG_IDS=org-default,org-partner1
+```
+
+| Variable | Description |
+|----------|-------------|
+| `TABLE_METRICS` | Base name for metrics table (stage is appended) |
+| `ORG_IDS` | Comma-separated organization IDs for scheduled trigger |
+
+### First Metric Generation
+
+#### When Is the First Metric Created?
+
+The first metric is generated automatically in one of these scenarios:
+
+1. **Scheduled Trigger** (Recommended): The EventBridge schedule runs at 0:00 UTC every day. The first metric appears at the next scheduled execution after deployment.
+
+2. **Event-Driven Trigger**: Creating the first credit note or payment for an organization immediately triggers calculation, creating the first metric record.
+
+3. **Manual Trigger**: You can manually invoke the Lambda function with an event:
+   ```json
+   {
+     "orgId": "org-default"
+   }
+   ```
+
+#### First Metric Example Scenario
+
+1. **Deploy** the application with EventBridge schedule enabled
+2. **Create a Client** with credit limit (e.g., `creditLimit: 100000`)
+   - Still no metric yet (schedule hasn't run)
+3. **Create a Credit Note** (e.g., `amount: 25000`)
+   - **Event-driven trigger fires immediately**
+   - First metric is created with `value: 25.00`
+4. **View the metric** by querying the metrics table for today's date
+
+### Performance & Scalability
+
+- **Query Performance**: O(1) lookup by date (partition key + sort key)
+- **Write Performance**: O(1) put operation per organization per day
+- **Multi-tenancy**: Each organization has isolated metric records via partition key
+- **No Indexes Required**: Daily snapshots are accessed directly via keys
+- **Metrics Table Growth**: One record per organization per day (~365 records/year per org)
 
 ---
 
