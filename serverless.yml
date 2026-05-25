@@ -16,8 +16,6 @@ provider:
         - '*'
       allowedMethods:
         - '*'
-      exposedHeaders:
-        - '*'
   environment:
     NODE_ENV: ${self:provider.stage}
     # Existing tables
@@ -29,8 +27,6 @@ provider:
     TABLE_ORGANIZATIONS: ${env:TABLE_ORGANIZATIONS_BASE, 'organizations'}-${self:provider.stage}
     TABLE_USERS: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
-    AWS_LAMBDA_FUNCTION_NAME: !Ref ProcessCreditNoteExpirationLambdaFunction
-    EVENTBRIDGE_ROLE_ARN: !GetAtt EventBridgeInvokeLambdaRole.Arn
   iam:
     role:
       statements:
@@ -99,7 +95,6 @@ functions:
       - httpApi:
           path: /hello
           method: GET
-          cors: true
 
   # ===== Clients endpoints =====
   listClients:
@@ -108,7 +103,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: GET
-          cors: true
 
   getClient:
     handler: src/functions/clients/handler.getClient
@@ -116,7 +110,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: GET
-          cors: true
 
   createClient:
     handler: src/functions/clients/handler.createClient
@@ -124,7 +117,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: POST
-          cors: true
 
   updateClient:
     handler: src/functions/clients/handler.updateClient
@@ -132,7 +124,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: PUT
-          cors: true
 
   deleteClient:
     handler: src/functions/clients/handler.deleteClient
@@ -140,7 +131,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: DELETE
-          cors: true
 
   bulkImportClients:
     handler: src/functions/clients/handler.bulkImportClients
@@ -148,7 +138,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/bulk-import
           method: POST
-          cors: true
 
   # ===== Credit Notes endpoints =====
   listCreditNotes:
@@ -157,7 +146,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
           method: GET
-          cors: true
 
   getCreditNote:
     handler: src/functions/credit-notes/handler.getCreditNote
@@ -165,7 +153,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: GET
-          cors: true
 
   createCreditNote:
     handler: src/functions/credit-notes/handler.createCreditNote
@@ -173,7 +160,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
           method: POST
-          cors: true
 
   updateCreditNote:
     handler: src/functions/credit-notes/handler.updateCreditNote
@@ -181,7 +167,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: PUT
-          cors: true
 
   deleteCreditNote:
     handler: src/functions/credit-notes/handler.deleteCreditNote
@@ -189,7 +174,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: DELETE
-          cors: true
 
   # ===== Credit Notes Expiration Handler =====
   processCreditNoteExpiration:
@@ -202,7 +186,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments
           method: GET
-          cors: true
 
   getPayment:
     handler: src/functions/payments/handler.getPayment
@@ -210,7 +193,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: GET
-          cors: true
 
   createPayment:
     handler: src/functions/payments/handler.createPayment
@@ -218,7 +200,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments
           method: POST
-          cors: true
 
   updatePayment:
     handler: src/functions/payments/handler.updatePayment
@@ -226,7 +207,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: PUT
-          cors: true
 
   deletePayment:
     handler: src/functions/payments/handler.deletePayment
@@ -234,7 +214,6 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: DELETE
-          cors: true
 
   # ===== Credit Usage calculation =====
   calculateCreditUsageScheduled:
@@ -255,7 +234,6 @@ functions:
       - httpApi:
           path: /users/me/organizations
           method: GET
-          cors: true
 
   getOrganization:
     handler: src/functions/organizations/handler.getOrganization
@@ -263,7 +241,6 @@ functions:
       - httpApi:
           path: /organizations/{orgId}
           method: GET
-          cors: true
 
   createOrganization:
     handler: src/functions/organizations/handler.createOrganization
@@ -271,7 +248,6 @@ functions:
       - httpApi:
           path: /organizations
           method: POST
-          cors: true
 
   updateOrganization:
     handler: src/functions/organizations/handler.updateOrganization
@@ -279,7 +255,6 @@ functions:
       - httpApi:
           path: /organizations/{orgId}
           method: PATCH
-          cors: true
 
   listOrganizationMembers:
     handler: src/functions/organizations/handler.listOrganizationMembers
@@ -287,7 +262,6 @@ functions:
       - httpApi:
           path: /organizations/{orgId}/members
           method: GET
-          cors: true
 
   # ===== Users endpoints =====
   getCurrentUser:
@@ -296,7 +270,6 @@ functions:
       - httpApi:
           path: /users/me
           method: GET
-          cors: true
 
   updateCurrentUser:
     handler: src/functions/users/handler.updateCurrentUser
@@ -304,7 +277,6 @@ functions:
       - httpApi:
           path: /users/me
           method: PATCH
-          cors: true
 
   getUser:
     handler: src/functions/users/handler.getUser
@@ -312,7 +284,6 @@ functions:
       - httpApi:
           path: /users/{userId}
           method: GET
-          cors: true
 
   # ===== Webhooks =====
   clerkWebhook:
@@ -321,7 +292,6 @@ functions:
       - httpApi:
           path: /webhooks/clerk
           method: POST
-          cors: true
 
 resources:
   Resources:

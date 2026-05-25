@@ -6,21 +6,33 @@ import {
   RemoveTargetsCommand,
 } from '@aws-sdk/client-eventbridge';
 import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { createHash } from 'crypto';
 
 const eventBridgeClient = new EventBridgeClient({});
 const lambdaClient = new LambdaClient({});
+const stsClient = new STSClient({});
 
-const FUNCTION_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME as string;
+// Get these from CloudFormation stack name or environment
+const STACK_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME?.split('-').slice(0, -1).join('-') || 'canaima-backend';
+const STAGE = process.env.STAGE || 'dev';
 
-console.log('EventBridge Utilities initialized', { FUNCTION_NAME });
+console.log('EventBridge Utilities initialized', { STACK_NAME, STAGE });
 
 /**
- * Generate a unique rule name for a credit note
- * Format: credit-note-{orgId}-{creditNoteId}
+ * Generate a unique rule name for a credit note using a hash
+ * EventBridge rule names have a max length of 64 characters
+ * Format: cn-{32-char-md5-hash}
+ * This is deterministic so we can reliably delete the rule later
  */
 export function generateRuleName(orgId: string, creditNoteId: string): string {
-  // Replace non-alphanumeric with hyphens to comply with EventBridge naming rules
-  return `credit-note-${orgId}-${creditNoteId}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  // Create a hash from orgId + creditNoteId
+  const hash = createHash('md5')
+    .update(`${orgId}-${creditNoteId}`)
+    .digest('hex');
+  
+  // Format: cn-{hash} (total 35 chars: 3 + 32)
+  return `cn-${hash}`;
 }
 
 /**
@@ -67,10 +79,14 @@ export async function createCreditNoteExpirationRule(
 
     console.log(`Created EventBridge rule: ${ruleName}`);
 
+    // Get Lambda function name from the current context
+    // The Lambda function name follows pattern: {stackName}-processCreditNoteExpiration
+    const functionName = `${STACK_NAME}-processCreditNoteExpiration`;
+    
     // Get the Lambda function ARN
     const functionInfo = await lambdaClient.send(
       new GetFunctionCommand({
-        FunctionName: FUNCTION_NAME,
+        FunctionName: functionName,
       }),
     );
 
@@ -78,6 +94,12 @@ export async function createCreditNoteExpirationRule(
     if (!lambdaArn) {
       throw new Error('Could not get Lambda function ARN');
     }
+
+    // Get account ID for role ARN
+    const callerIdentity = await stsClient.send(new GetCallerIdentityCommand({}));
+    const accountId = callerIdentity.Account;
+
+    const eventBridgeRoleArn = `arn:aws:iam::${accountId}:role/${STACK_NAME}-${STAGE}-eventbridge`;
 
     // Add Lambda as target to the rule
     await eventBridgeClient.send(
@@ -87,10 +109,7 @@ export async function createCreditNoteExpirationRule(
           {
             Id: '1',
             Arn: lambdaArn,
-            RoleArn: process.env.EVENTBRIDGE_ROLE_ARN,
-            DeadLetterConfig: {
-              Arn: process.env.EVENTBRIDGE_DLQ_ARN,
-            },
+            RoleArn: eventBridgeRoleArn,
             // Pass credit note details to the Lambda
             Input: JSON.stringify({
               creditNoteId,
