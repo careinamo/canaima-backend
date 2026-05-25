@@ -4,6 +4,7 @@ import * as repo from './repository';
 import { CreditLimitExceededError } from './repository';
 import type { CreditNote, CreditNoteStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
+import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule } from './eventbridge-utils';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -124,6 +125,16 @@ export const createCreditNote = async (
     const input = validateCreateCreditNote(body);
 
     const creditNote = await repo.createCreditNote(orgId, input);
+
+    // Create EventBridge rule for credit note expiration (fires at end of dueDate)
+    try {
+      await createCreditNoteExpirationRule(orgId, creditNote.id, creditNote.dueDate, creditNote.clientId);
+      console.log(`Created EventBridge rule for credit note ${creditNote.id}`);
+    } catch (error) {
+      console.error(`Failed to create EventBridge rule for credit note ${creditNote.id}:`, error);
+      // Don't fail the request if EventBridge rule creation fails
+      // Log it but continue - the credit note is created successfully
+    }
     
     // Trigger credit usage calculation asynchronously
     triggerCreditUsageCalculation(orgId).catch(err => 
@@ -202,6 +213,16 @@ export const deleteCreditNote = async (
     const id = event.pathParameters?.id;
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing credit note id');
+
+    // Delete EventBridge rule for credit note expiration
+    try {
+      await deleteCreditNoteExpirationRule(orgId, id);
+      console.log(`Deleted EventBridge rule for credit note ${id}`);
+    } catch (error) {
+      console.error(`Failed to delete EventBridge rule for credit note ${id}:`, error);
+      // Don't fail the request if EventBridge rule deletion fails
+      // Log it but continue - the credit note will still be deleted
+    }
 
     const deleted = await repo.deleteCreditNote(orgId, id);
     if (!deleted) return clientError(404, 'Credit note not found');
