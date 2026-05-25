@@ -1521,7 +1521,7 @@ The Credit Notes table follows the same single-table design pattern as the Clien
 | `invoiceNumber` | String | Related invoice number | Reference to invoice |
 | `amount` | Number | Credit amount | Must be positive |
 | `paid` | Number | Total amount paid against this credit note | Starts at 0, incremented by payments |
-| `status` | String | Status: `pending`, `partial`, or `paid` | Auto-updated when `paid` reaches `amount` |
+| `status` | String | Status: `pending`, `partial`, `paid`, or `overdue` | Auto-updated based on payment status and due date |
 | `statusGSI` | String | Copy of status for GSI queries | For status-based filtering |
 | `dueDate` | String | ISO 8601 timestamp | Payment/application due date |
 | `description` | String | Reason or notes for the credit | Optional |
@@ -1765,7 +1765,7 @@ All endpoints return standardized JSON error responses:
 - **clientId**: Required, must be a valid UUID referencing an existing Client
 - **invoiceNumber**: Required, non-empty string
 - **amount**: Required, positive number (> 0)
-- **status**: Optional, one of: `pending`, `partial`, `paid` (default: `pending`)
+- **status**: Optional, one of: `pending`, `partial`, `paid`, `overdue` (default: `pending`)
 - **dueDate**: Required, valid ISO 8601 date string
 - **description**: Optional string
 - **Credit Limit Enforcement**: Creating a credit note will fail with HTTP 400 if `accumulatedDebt + amount > creditLimit`
