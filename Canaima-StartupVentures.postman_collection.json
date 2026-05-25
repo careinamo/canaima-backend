@@ -1,0 +1,382 @@
+{
+  "info": {
+    "_postman_id": "startup-ventures-collection",
+    "name": "Canaima - StartUp Ventures",
+    "description": "Collection for testing Credit Notes and Payments creation for StartUp Ventures organization and client",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Credit Notes",
+      "description": "Credit notes management endpoints for StartUp Ventures",
+      "item": [
+        {
+          "name": "Create Credit Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"clientName\": \"StartUp Ventures Inc\",\n  \"invoiceNumber\": \"INV-2024-SV-001\",\n  \"amount\": 15000,\n  \"status\": \"pending\",\n  \"dueDate\": \"2025-06-30T00:00:00Z\",\n  \"description\": \"Credit for service adjustment\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes"
+              ]
+            },
+            "description": "Create a new credit note for StartUp Ventures Inc"
+          },
+          "response": []
+        },
+        {
+          "name": "List Credit Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes?clientId={{clientId}}&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes"
+              ],
+              "query": [
+                {
+                  "key": "clientId",
+                  "value": "{{clientId}}",
+                  "description": "Filter by client ID"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Records per page (max: 500)"
+                }
+              ]
+            },
+            "description": "List all credit notes for StartUp Ventures Inc"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Credit Note",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes/{{creditNoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes",
+                "{{creditNoteId}}"
+              ]
+            },
+            "description": "Retrieve a specific credit note by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Credit Note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"partial\",\n  \"amount\": 7500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes/{{creditNoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes",
+                "{{creditNoteId}}"
+              ]
+            },
+            "description": "Update a credit note"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Credit Note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes/{{creditNoteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes",
+                "{{creditNoteId}}"
+              ]
+            },
+            "description": "Delete a credit note"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "description": "Payments management endpoints for StartUp Ventures",
+      "item": [
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"creditNoteId\": \"{{creditNoteId}}\",\n  \"amount\": 5000,\n  \"method\": \"bank_transfer\",\n  \"status\": \"confirmed\",\n  \"referenceNumber\": \"REF-2024-SV-001\",\n  \"description\": \"Payment for credit note\",\n  \"paymentDate\": \"2025-06-15T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments"
+              ]
+            },
+            "description": "Create a new payment for StartUp Ventures Inc"
+          },
+          "response": []
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments?clientId={{clientId}}&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "clientId",
+                  "value": "{{clientId}}",
+                  "description": "Filter by client ID"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Records per page (max: 100)"
+                }
+              ]
+            },
+            "description": "List all payments for StartUp Ventures Inc"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Retrieve a specific payment by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Payment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\",\n  \"referenceNumber\": \"REF-2024-SV-001-UPDATED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Update a payment"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Payment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/payments/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "payments",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Delete a payment"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Client Info",
+      "description": "Get information about the StartUp Ventures Inc client",
+      "item": [
+        {
+          "name": "Get Client",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/{{clientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients",
+                "{{clientId}}"
+              ]
+            },
+            "description": "Get client details for StartUp Ventures Inc"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "API base URL"
+    },
+    {
+      "key": "orgId",
+      "value": "org-startupventures",
+      "type": "string",
+      "description": "StartUp Ventures organization ID"
+    },
+    {
+      "key": "clientId",
+      "value": "550e8400-e29b-41d4-a716-446655440007",
+      "type": "string",
+      "description": "StartUp Ventures Inc client ID"
+    },
+    {
+      "key": "creditNoteId",
+      "value": "",
+      "type": "string",
+      "description": "Credit note ID (fill after creating a credit note)"
+    },
+    {
+      "key": "paymentId",
+      "value": "",
+      "type": "string",
+      "description": "Payment ID (fill after creating a payment)"
+    }
+  ]
+}
