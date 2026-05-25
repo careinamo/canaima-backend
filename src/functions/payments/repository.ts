@@ -5,7 +5,6 @@ import {
   PutCommand,
   TransactWriteCommand,
   UpdateCommand,
-  DeleteCommand,
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { Payment, PaymentRecord, CreatePaymentInput, UpdatePaymentInput, ListPaymentsParams } from './types';
@@ -14,6 +13,7 @@ import * as clientRepo from '../clients/repository';
 const TABLE = process.env.TABLE_PAYMENTS as string;
 const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
 const CREDIT_NOTES_TABLE = process.env.TABLE_CREDIT_NOTES as string;
+const METRICS_TABLE = process.env.TABLE_METRICS as string;
 
 console.log('Payments Repository initialized. TABLE_PAYMENTS:', TABLE);
 
@@ -288,6 +288,11 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     }),
   );
 
+  // Update monthly payments metrics asynchronously
+  updateMonthlyPaymentsMetrics(orgId).catch(err =>
+    console.warn('Failed to update monthly payments metrics:', err),
+  );
+
   return toPayment(record as unknown as Record<string, unknown>);
 }
 
@@ -425,6 +430,14 @@ export async function updatePayment(orgId: string, paymentId: string, input: Upd
         ReturnValues: 'ALL_NEW',
       }),
     );
+    
+    // Update monthly payments metrics if status or amount changed
+    if (input.status !== undefined || input.amount !== undefined) {
+      updateMonthlyPaymentsMetrics(orgId).catch(err =>
+        console.warn('Failed to update monthly payments metrics:', err),
+      );
+    }
+    
     return toPayment(result.Attributes as Record<string, unknown>);
   } catch (e) {
     if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return null;
@@ -500,7 +513,7 @@ export async function deletePayment(orgId: string, paymentId: string): Promise<b
       }
     }
 
-    const transactItems = [
+    const transactItems: Array<any> = [
       {
         Delete: {
           TableName: TABLE,
@@ -542,9 +555,86 @@ export async function deletePayment(orgId: string, paymentId: string): Promise<b
       }),
     );
 
+    // Update monthly payments metrics asynchronously
+    updateMonthlyPaymentsMetrics(orgId).catch(err =>
+      console.warn('Failed to update monthly payments metrics:', err),
+    );
+
     return true;
   } catch (e) {
     if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return false;
     throw e;
+  }
+}
+
+/**
+ * Update the monthly payments total metrics for an organization
+ * Queries all payments for the given month and updates the metrics table
+ */
+export async function updateMonthlyPaymentsMetrics(orgId: string, date: Date = new Date()): Promise<void> {
+  try {
+    // Format date as YYYY-MM for the SK
+    const yearMonth = date.toISOString().slice(0, 7); // e.g., "2026-05"
+    
+    // Query all payments for this org
+    const pk = `org#${orgId}`;
+    const queryInput = {
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+      ExpressionAttributeValues: {
+        ':pk': pk,
+        ':skPrefix': 'payment#',
+      },
+    };
+
+    const allPayments: Record<string, unknown>[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+
+    // Fetch all payments for this organization
+    do {
+      const result = await ddb.send(new QueryCommand({ ...queryInput, ExclusiveStartKey: lastKey }));
+      for (const item of result.Items ?? []) {
+        allPayments.push(item);
+      }
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+
+    // Filter and sum all payments from the same month (regardless of status)
+    let totalAmount = 0;
+    for (const payment of allPayments) {
+      const createdAt = payment.createdAt as string;
+      const paymentMonth = createdAt.slice(0, 7); // Extract YYYY-MM from ISO date
+
+      if (paymentMonth === yearMonth) {
+        totalAmount += Number(payment.amount ?? 0);
+      }
+    }
+
+    // Update metrics table with the total
+    if (METRICS_TABLE) {
+      const metricsKey = {
+        PK: `PaymentsTotalMonth#${orgId}`,
+        SK: yearMonth,
+      };
+
+      await ddb.send(
+        new UpdateCommand({
+          TableName: METRICS_TABLE,
+          Key: metricsKey,
+          UpdateExpression: 'SET #value = :value, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#value': 'value',
+            '#updatedAt': 'updatedAt',
+          },
+          ExpressionAttributeValues: {
+            ':value': totalAmount,
+            ':updatedAt': new Date().toISOString(),
+          },
+        }),
+      );
+    }
+  } catch (error) {
+    console.error('Error updating monthly payments metrics:', error);
+    // Don't throw - this is a non-critical operation
   }
 }

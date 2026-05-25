@@ -22,6 +22,7 @@ export class CreditLimitExceededError extends Error {
 
 const TABLE = process.env.TABLE_CREDIT_NOTES as string;
 const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
+const METRICS_TABLE = process.env.TABLE_METRICS as string;
 
 console.log('Credit Notes Repository initialized. TABLE_CREDIT_NOTES:', TABLE);
 
@@ -278,6 +279,11 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     }),
   );
 
+  // Update monthly credit notes metrics asynchronously
+  updateMonthlyCreditNotesMetrics(orgId).catch(err =>
+    console.warn('Failed to update monthly credit notes metrics:', err),
+  );
+
   return toCreditNote(record as unknown as Record<string, unknown>);
 }
 
@@ -387,6 +393,14 @@ export async function updateCreditNote(
         ReturnValues: 'ALL_NEW',
       }),
     );
+    
+    // Update monthly credit notes metrics if amount changed
+    if (input.amount !== undefined) {
+      updateMonthlyCreditNotesMetrics(orgId).catch(err =>
+        console.warn('Failed to update monthly credit notes metrics:', err),
+      );
+    }
+    
     return toCreditNote(result.Attributes as Record<string, unknown>);
   } catch (e) {
     if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return null;
@@ -449,9 +463,86 @@ export async function deleteCreditNote(orgId: string, noteId: string): Promise<b
       }),
     );
 
+    // Update monthly credit notes metrics asynchronously
+    updateMonthlyCreditNotesMetrics(orgId).catch(err =>
+      console.warn('Failed to update monthly credit notes metrics:', err),
+    );
+
     return true;
   } catch (e) {
     if ((e as { name?: string }).name === 'ConditionalCheckFailedException') return false;
     throw e;
+  }
+}
+
+/**
+ * Update the monthly credit notes total metrics for an organization
+ * Queries all credit notes for the given month and updates the metrics table
+ */
+export async function updateMonthlyCreditNotesMetrics(orgId: string, date: Date = new Date()): Promise<void> {
+  try {
+    // Format date as YYYY-MM for the SK
+    const yearMonth = date.toISOString().slice(0, 7); // e.g., "2026-05"
+    
+    // Query all credit notes for this org
+    const pk = `org#${orgId}`;
+    const queryInput = {
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+      ExpressionAttributeValues: {
+        ':pk': pk,
+        ':skPrefix': 'creditnote#',
+      },
+    };
+
+    const allCreditNotes: Record<string, unknown>[] = [];
+    let lastKey: Record<string, unknown> | undefined;
+
+    // Fetch all credit notes for this organization
+    do {
+      const result = await ddb.send(new QueryCommand({ ...queryInput, ExclusiveStartKey: lastKey }));
+      for (const item of result.Items ?? []) {
+        allCreditNotes.push(item);
+      }
+      lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastKey);
+
+    // Filter and sum all credit notes from the same month (regardless of status)
+    let totalAmount = 0;
+    for (const creditNote of allCreditNotes) {
+      const createdAt = creditNote.createdAt as string;
+      const creditNoteMonth = createdAt.slice(0, 7); // Extract YYYY-MM from ISO date
+
+      if (creditNoteMonth === yearMonth) {
+        totalAmount += Number(creditNote.amount ?? 0);
+      }
+    }
+
+    // Update metrics table with the total
+    if (METRICS_TABLE) {
+      const metricsKey = {
+        PK: `CreditNotesTotalMonth#${orgId}`,
+        SK: yearMonth,
+      };
+
+      await ddb.send(
+        new UpdateCommand({
+          TableName: METRICS_TABLE,
+          Key: metricsKey,
+          UpdateExpression: 'SET #value = :value, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#value': 'value',
+            '#updatedAt': 'updatedAt',
+          },
+          ExpressionAttributeValues: {
+            ':value': totalAmount,
+            ':updatedAt': new Date().toISOString(),
+          },
+        }),
+      );
+    }
+  } catch (error) {
+    console.error('Error updating monthly credit notes metrics:', error);
+    // Don't throw - this is a non-critical operation
   }
 }
