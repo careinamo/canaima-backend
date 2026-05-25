@@ -1,5 +1,3 @@
-export type ClientStatus = 'active' | 'inactive' | 'overdue';
-
 export interface Client {
   id: string;
   orgId: string;
@@ -7,7 +5,8 @@ export interface Client {
   email: string;
   phone?: string;
   address?: string;
-  status: ClientStatus;
+  active: boolean;
+  delinquent: boolean;
   creditLimit: number;
   accumulatedDebt: number;
   lastPayment?: string;
@@ -29,7 +28,8 @@ export interface CreateClientInput {
   email: string;
   phone?: string;
   address?: string;
-  status: ClientStatus;
+  active: boolean;
+  delinquent?: boolean;
   creditLimit: number;
   notes?: string;
 }
@@ -39,7 +39,8 @@ export interface UpdateClientInput {
   email?: string;
   phone?: string;
   address?: string;
-  status?: ClientStatus;
+  active?: boolean;
+  delinquent?: boolean;
   creditLimit?: number;
   accumulatedDebt?: number;
   notes?: string;
@@ -48,7 +49,8 @@ export interface UpdateClientInput {
 export interface ListClientsParams {
   orgId: string;
   search?: string;
-  status?: ClientStatus;
+  active?: boolean;
+  delinquent?: boolean;
   page: number;
   limit: number;
   sortBy: string;

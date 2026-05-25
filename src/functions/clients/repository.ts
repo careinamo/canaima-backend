@@ -82,10 +82,16 @@ export async function listClients(
   const exprNames: Record<string, string> = {};
   const filterParts: string[] = [];
 
-  if (params.status) {
-    filterParts.push('#status = :status');
-    exprNames['#status'] = 'status';
-    exprValues[':status'] = params.status;
+  if (params.active !== undefined) {
+    filterParts.push('#active = :active');
+    exprNames['#active'] = 'active';
+    exprValues[':active'] = params.active;
+  }
+
+  if (params.delinquent !== undefined) {
+    filterParts.push('#delinquent = :delinquent');
+    exprNames['#delinquent'] = 'delinquent';
+    exprValues[':delinquent'] = params.delinquent;
   }
 
   if (params.search) {
@@ -140,7 +146,8 @@ export async function createClient(orgId: string, input: CreateClientInput): Pro
     emailLower: input.email.toLowerCase(),
     phone: input.phone,
     address: input.address,
-    status: input.status,
+    active: input.active,
+    delinquent: input.delinquent ?? false,
     creditLimit: input.creditLimit,
     accumulatedDebt: 0,
     notes: input.notes,
@@ -193,7 +200,8 @@ export async function createClientsBatch(
         emailLower: input.email.toLowerCase(),
         phone: input.phone,
         address: input.address,
-        status: input.status,
+        active: input.active,
+        delinquent: input.delinquent ?? false,
         creditLimit: input.creditLimit,
         accumulatedDebt: 0,
         notes: input.notes,
@@ -234,10 +242,15 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
     values[':email'] = input.email;
     values[':emailLower'] = input.email.toLowerCase();
   }
-  if (input.status !== undefined) {
-    sets.push('#status = :status');
-    names['#status'] = 'status';
-    values[':status'] = input.status;
+  if (input.active !== undefined) {
+    sets.push('#active = :active');
+    names['#active'] = 'active';
+    values[':active'] = input.active;
+  }
+  if (input.delinquent !== undefined) {
+    sets.push('#delinquent = :delinquent');
+    names['#delinquent'] = 'delinquent';
+    values[':delinquent'] = input.delinquent;
   }
   if (input.creditLimit !== undefined) {
     sets.push('#creditLimit = :creditLimit');

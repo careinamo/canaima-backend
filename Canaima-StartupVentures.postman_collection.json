@@ -343,6 +343,36 @@
             "description": "Get client details for StartUp Ventures Inc"
           },
           "response": []
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": true,\n  \"delinquent\": false,\n  \"creditLimit\": 75000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/{{clientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "clients",
+                "{{clientId}}"
+              ]
+            },
+            "description": "Update client details (active, delinquent, creditLimit, etc.)"
+          },
+          "response": []
         }
       ]
     }

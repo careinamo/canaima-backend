@@ -1,6 +1,5 @@
-import type { ClientStatus, CreateClientInput, UpdateClientInput } from './types';
+import type { CreateClientInput, UpdateClientInput } from './types';
 
-const VALID_STATUSES: ClientStatus[] = ['active', 'inactive', 'overdue'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export class ValidationError extends Error {
@@ -26,10 +25,8 @@ export function validateCreateClient(body: unknown): CreateClientInput {
     throw new ValidationError('email format is invalid');
   }
 
-  const status: ClientStatus = (input.status as ClientStatus) ?? 'active';
-  if (!VALID_STATUSES.includes(status)) {
-    throw new ValidationError(`status must be one of: ${VALID_STATUSES.join(', ')}`);
-  }
+  const active = typeof input.active === 'boolean' ? input.active : true;
+  const delinquent = typeof input.delinquent === 'boolean' ? input.delinquent : false;
 
   const creditLimit = input.creditLimit !== undefined ? Number(input.creditLimit) : 0;
   if (isNaN(creditLimit) || creditLimit < 0) {
@@ -39,7 +36,8 @@ export function validateCreateClient(body: unknown): CreateClientInput {
   return {
     name: String(input.name).trim(),
     email: String(input.email).toLowerCase().trim(),
-    status,
+    active,
+    delinquent,
     creditLimit,
     phone: input.phone ? String(input.phone).trim() : undefined,
     address: input.address ? String(input.address).trim() : undefined,
@@ -69,11 +67,18 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
     result.email = email.toLowerCase();
   }
 
-  if ('status' in input) {
-    if (!VALID_STATUSES.includes(input.status as ClientStatus)) {
-      throw new ValidationError(`status must be one of: ${VALID_STATUSES.join(', ')}`);
+  if ('active' in input) {
+    if (typeof input.active !== 'boolean') {
+      throw new ValidationError('active must be a boolean');
     }
-    result.status = input.status as ClientStatus;
+    result.active = input.active;
+  }
+
+  if ('delinquent' in input) {
+    if (typeof input.delinquent !== 'boolean') {
+      throw new ValidationError('delinquent must be a boolean');
+    }
+    result.delinquent = input.delinquent;
   }
 
   if ('creditLimit' in input) {
@@ -102,7 +107,7 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
 /**
  * Parse and validate a CSV string with client data.
  * Expected format: CSV with header row
- * Columns: name, email, phone, address, status, creditLimit, notes
+ * Columns: name, email, phone, address, active, delinquent, creditLimit, notes
  * Maximum 50 rows allowed.
  */
 export interface ParsedCsvRow {

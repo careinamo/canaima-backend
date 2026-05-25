@@ -196,14 +196,15 @@ Retrieve a paginated list of all clients for a given organization.
 | `page` | number | 1 | Page number (starts at 1) |
 | `limit` | number | 20 | Records per page (max: 500) |
 | `search` | string | - | Search term (matches name or email, case-insensitive) |
-| `status` | string | - | Filter by status: `active`, `inactive`, or `overdue` |
+| `active` | boolean | - | Filter by active status: `true` or `false` |
+| `delinquent` | boolean | - | Filter by delinquent status: `true` or `false` |
 | `sortBy` | string | `createdAt` | Field to sort by |
 | `sortOrder` | string | `asc` | Sort direction: `asc` or `desc` |
 
 **Example Request:**
 
 ```bash
-curl http://localhost:3000/orgs/org-default/clients?page=1\&limit=20\&search=acme\&status=active\&sortBy=name\&sortOrder=asc
+curl http://localhost:3000/orgs/org-default/clients?page=1\&limit=20\&search=acme\&active=true\&delinquent=false\&sortBy=name\&sortOrder=asc
 ```
 
 **Response (200 OK):**
@@ -218,7 +219,8 @@ curl http://localhost:3000/orgs/org-default/clients?page=1\&limit=20\&search=acm
       "email": "contact@acme.com",
       "phone": "+1-555-0100",
       "address": "123 Business Ave, New York, NY 10001",
-      "status": "active",
+      "active": true,
+      "delinquent": false,
       "creditLimit": 50000,
       "accumulatedDebt": 12500,
       "lastPayment": "2025-05-08T00:00:00.000Z",
@@ -299,7 +301,8 @@ Create a new client account within an organization.
 | `email` | string | ✓ | Client email (must be unique) |
 | `phone` | string | - | Phone number |
 | `address` | string | - | Physical address |
-| `status` | string | - | Status: `active`, `inactive`, or `overdue` (default: `active`) |
+| `active` | boolean | - | Whether the client is active (default: `true`) |
+| `delinquent` | boolean | - | Whether the client is delinquent (default: `false`) |
 | `creditLimit` | number | - | Credit limit amount (≥ 0, default: `0`) |
 | `notes` | string | - | Internal notes |
 
@@ -313,7 +316,8 @@ curl -X POST http://localhost:3000/orgs/org-default/clients \
     "email": "contact@newclient.com",
     "phone": "+1-555-0200",
     "address": "500 Main St, Boston, MA 02101",
-    "status": "active",
+    "active": true,
+    "delinquent": false,
     "creditLimit": 75000,
     "notes": "Referred by Acme Corporation"
   }'
@@ -329,7 +333,8 @@ curl -X POST http://localhost:3000/orgs/org-default/clients \
   "email": "contact@newclient.com",
   "phone": "+1-555-0200",
   "address": "500 Main St, Boston, MA 02101",
-  "status": "active",
+  "active": true,
+  "delinquent": false,
   "creditLimit": 75000,
   "accumulatedDebt": 0,
   "notes": "Referred by Acme Corporation",
@@ -364,7 +369,8 @@ Update one or more fields of an existing client.
 | `email` | string | Client email (must remain unique) |
 | `phone` | string | Phone number |
 | `address` | string | Physical address |
-| `status` | string | Status: `active`, `inactive`, or `overdue` |
+| `active` | boolean | Whether the client is active |
+| `delinquent` | boolean | Whether the client is delinquent |
 | `creditLimit` | number | Credit limit amount (≥ 0). **If updated, must be ≥ current `accumulatedDebt`** |
 | `accumulatedDebt` | number | Accumulated debt amount (≥ 0). **If updated, must be ≤ client's `creditLimit`** |
 | `notes` | string | Internal notes |
@@ -375,7 +381,8 @@ Update one or more fields of an existing client.
 curl -X PUT http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372-a567-0e02b2c3d479 \
   -H "Content-Type: application/json" \
   -d '{
-    "status": "overdue",
+    "active": false,
+    "delinquent": true,
     "creditLimit": 100000,
     "accumulatedDebt": 25000
   }'
@@ -391,7 +398,8 @@ curl -X PUT http://localhost:3000/orgs/org-default/clients/f47ac10b-58cc-4372-a5
   "email": "contact@newclient.com",
   "phone": "+1-555-0200",
   "address": "500 Main St, Boston, MA 02101",
-  "status": "overdue",
+  "active": false,
+  "delinquent": true,
   "creditLimit": 100000,
   "accumulatedDebt": 25000,
   "notes": "Referred by Acme Corporation",
@@ -473,7 +481,7 @@ Import multiple clients at once from a CSV file. Maximum of 50 clients per reque
 **Request Body:**
 
 Plain text CSV content with the following format:
-- **Header row required** with column names: `name`, `email`, and optionally: `phone`, `address`, `status`, `creditLimit`, `notes`
+- **Header row required** with column names: `name`, `email`, and optionally: `phone`, `address`, `active`, `delinquent`, `creditLimit`, `notes`
 - One client per line
 - Columns separated by commas
 - Maximum 50 data rows (excluding header)
@@ -481,10 +489,10 @@ Plain text CSV content with the following format:
 **CSV Format Example:**
 
 ```csv
-name,email,phone,address,status,creditLimit,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,active,50000,Key account
-Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,active,75000,Referred by Acme
-Global Traders,sales@global.com,+1-555-0102,789 Pine Rd,inactive,30000,On hold
+name,email,phone,address,active,delinquent,creditLimit,notes
+Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
+Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,Referred by Acme
+Global Traders,sales@global.com,+1-555-0102,789 Pine Rd,false,false,30000,On hold
 ```
 
 **Example Request:**
@@ -500,9 +508,9 @@ Or inline:
 ```bash
 curl -X POST http://localhost:3000/orgs/org-default/clients/bulk-import \
   -H "Content-Type: text/plain" \
-  -d "name,email,phone,address,status,creditLimit,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,active,50000,Key account
-Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,active,75000,Referred"
+  -d "name,email,phone,address,active,delinquent,creditLimit,notes
+Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
+Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,Referred"
 ```
 
 **Response (202 Accepted):**
@@ -537,7 +545,8 @@ Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,active,75000,Referred"
       "email": "info@techsol.com",
       "phone": "+1-555-0101",
       "address": "456 Oak Ave",
-      "status": "active",
+      "active": true,
+      "delinquent": false,
       "creditLimit": 75000,
       "accumulatedDebt": 0,
       "notes": "Referred",
@@ -601,7 +610,8 @@ When some rows fail validation but others succeed:
 - `name` must not be empty
 - `email` must be in valid email format (XXX@XXX.XXX)
 - `email` must be unique across the organization (checked against existing clients and duplicates within the batch)
-- `status` must be one of: `active`, `inactive`, `overdue` (defaults to `active` if omitted)
+- `active` must be a boolean (defaults to `true` if omitted)
+- `delinquent` must be a boolean (defaults to `false` if omitted)
 - `creditLimit` must be a non-negative number (defaults to 0 if omitted)
 - `phone`, `address`, and `notes` are optional
 

@@ -1,7 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { ValidationError, validateCreateClient, validateUpdateClient, parseCsvClients } from './validators';
 import * as repo from './repository';
-import type { ClientStatus } from './types';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -43,17 +42,14 @@ export const listClients = async (
     const limit = Math.min(500, Math.max(1, parseInt(q.limit ?? '20', 10) || 20));
     const sortBy = q.sortBy ?? 'createdAt';
     const sortOrder: 'asc' | 'desc' = q.sortOrder === 'desc' ? 'desc' : 'asc';
-    const status = q.status as ClientStatus | undefined;
-
-    const VALID_STATUSES: ClientStatus[] = ['active', 'inactive', 'overdue'];
-    if (status && !VALID_STATUSES.includes(status)) {
-      return clientError(400, `status must be one of: ${VALID_STATUSES.join(', ')}`);
-    }
+    const active = q.active !== undefined ? q.active === 'true' : undefined;
+    const delinquent = q.delinquent !== undefined ? q.delinquent === 'true' : undefined;
 
     const { items, total } = await repo.listClients({
       orgId,
       search: q.search,
-      status,
+      active,
+      delinquent,
       page,
       limit,
       sortBy,

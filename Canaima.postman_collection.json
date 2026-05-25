@@ -21,7 +21,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients?page=1&limit=20&search=&status=&sortBy=createdAt&sortOrder=asc",
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/clients?page=1&limit=20&search=&active=&delinquent=&sortBy=createdAt&sortOrder=asc",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -47,9 +47,14 @@
                   "description": "Search term (matches name or email)"
                 },
                 {
-                  "key": "status",
+                  "key": "active",
                   "value": "",
-                  "description": "Filter by status: active, inactive, overdue"
+                  "description": "Filter by active status: true or false"
+                },
+                {
+                  "key": "delinquent",
+                  "value": "",
+                  "description": "Filter by delinquent status: true or false"
                 },
                 {
                   "key": "sortBy",
@@ -105,7 +110,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"New Client Corp\",\n  \"email\": \"contact@newclient.com\",\n  \"phone\": \"+1-555-0200\",\n  \"address\": \"500 Main St, Boston, MA 02101\",\n  \"status\": \"active\",\n  \"creditLimit\": 75000,\n  \"notes\": \"Referred by Acme Corporation\"\n}"
+              "raw": "{\n  \"name\": \"New Client Corp\",\n  \"email\": \"contact@newclient.com\",\n  \"phone\": \"+1-555-0200\",\n  \"address\": \"500 Main St, Boston, MA 02101\",\n  \"active\": true,\n  \"delinquent\": false,\n  \"creditLimit\": 75000,\n  \"notes\": \"Referred by Acme Corporation\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/orgs/{{orgId}}/clients",
@@ -134,7 +139,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"overdue\",\n  \"creditLimit\": 100000\n}"
+              "raw": "{\n  \"active\": false,\n  \"delinquent\": true,\n  \"creditLimit\": 100000\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/{{clientId}}",
@@ -185,7 +190,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "name,email,phone,address,status,creditLimit,notes\nAcme Corp,contact@acme.com,+1-555-0100,123 Main St,active,50000,Key account\nTech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,active,75000,Referred by Acme\nGlobal Traders,sales@global.com,+1-555-0102,789 Pine Rd,inactive,30000,On hold"
+              "raw": "name,email,phone,address,active,delinquent,creditLimit,notes\nAcme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account\nTech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,Referred by Acme\nGlobal Traders,sales@global.com,+1-555-0102,789 Pine Rd,false,false,30000,On hold"
             },
             "url": {
               "raw": "{{baseUrl}}/orgs/{{orgId}}/clients/bulk-import",
