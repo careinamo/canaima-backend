@@ -1,4 +1,4 @@
-export type CreditNoteStatus = 'pending' | 'partial' | 'paid';
+export type CreditNoteStatus = 'pending' | 'partial' | 'paid' | 'overdue';
 
 export interface CreditNote {
   id: string;

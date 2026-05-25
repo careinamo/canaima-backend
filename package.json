@@ -13,10 +13,12 @@
     "offline": "serverless offline",
     "build": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
+    "seed:organizations": "tsx src/seeds/organizations.ts",
+    "seed:users": "tsx src/seeds/users.ts",
     "seed:clients": "tsx src/seeds/clients.ts",
     "seed:credit-notes": "tsx src/seeds/credit-notes.ts",
     "seed:payments": "tsx src/seeds/payments.ts",
-    "seed": "npm run seed:clients && npm run seed:credit-notes && npm run seed:payments"
+    "seed": "npm run seed:organizations && npm run seed:users && npm run seed:clients && npm run seed:credit-notes && npm run seed:payments"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1045.0",

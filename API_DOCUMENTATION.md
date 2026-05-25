@@ -635,6 +635,19 @@ The Credit Notes module provides REST API endpoints for managing B2B credit note
 
 ---
 
+### Credit Note Status Values
+
+A credit note can have one of the following statuses:
+
+| Status | Description |
+|--------|-------------|
+| **pending** | Credit note has been created but has no payments recorded yet. `paid` = 0 |
+| **partial** | Credit note has received one or more payments, but the total paid amount is less than the credit note amount. 0 < `paid` < `amount` |
+| **paid** | Credit note has been completely paid. `paid` = `amount` |
+| **overdue** | Credit note has passed its due date and remains unpaid or partially paid. Automatically set when `dueDate` < current date and status is not `paid` |
+
+---
+
 ## Credit Notes Endpoint Details
 
 ### 1. GET /orgs/{orgId}/credit-notes — List Credit Notes
@@ -654,7 +667,7 @@ Retrieve a paginated list of all credit notes for a given organization.
 | `page` | number | 1 | Page number (starts at 1) |
 | `limit` | number | 20 | Records per page (max: 500) |
 | `search` | string | - | Search term (matches number, client name, or invoice number, case-insensitive) |
-| `status` | string | - | Filter by status: `pending`, `partial`, or `paid` |
+| `status` | string | - | Filter by status: `pending`, `partial`, `paid`, or `overdue` |
 | `clientId` | string | - | Filter credit notes belonging to a specific client (uses DynamoDB `clientIdIndex` GSI) |
 | `sortBy` | string | `createdAt` | Field to sort by |
 | `sortOrder` | string | `asc` | Sort direction: `asc` or `desc` |
@@ -820,7 +833,7 @@ Create a new credit note for a client within an organization.
 | `clientName` | string | ✓ | Client's display name (denormalized) |
 | `invoiceNumber` | string | ✓ | Related invoice number |
 | `amount` | number | ✓ | Credit amount (must be positive) |
-| `status` | string | - | Status: `pending`, `partial`, or `paid` (default: `pending`) |
+| `status` | string | - | Status: `pending`, `partial`, `paid`, or `overdue` (default: `pending`) |
 | `dueDate` | string | ✓ | Due date in ISO 8601 format |
 | `description` | string | - | Reason or description of the credit |
 
@@ -927,7 +940,7 @@ Update one or more fields of an existing credit note.
 | `clientName` | string | Client's display name |
 | `invoiceNumber` | string | Related invoice number |
 | `amount` | number | Credit amount (must be positive) |
-| `status` | string | Status: `pending`, `partial`, or `paid` |
+| `status` | string | Status: `pending`, `partial`, `paid`, or `overdue` |
 | `dueDate` | string | Due date in ISO 8601 format |
 | `description` | string | Reason or description |
 
