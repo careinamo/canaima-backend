@@ -9,6 +9,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import type { Payment, PaymentRecord, CreatePaymentInput, UpdatePaymentInput, ListPaymentsParams } from './types';
 import * as clientRepo from '../clients/repository';
+import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
 
 const TABLE = process.env.TABLE_PAYMENTS as string;
 const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
@@ -156,7 +157,7 @@ export async function listPayments(params: ListPaymentsParams): Promise<{ items:
 }
 
 export async function createPayment(orgId: string, input: CreatePaymentInput): Promise<Payment> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const paymentId = crypto.randomUUID();
 
   // Resolve client and ensure payment does not exceed current debt.
@@ -318,7 +319,7 @@ export async function updatePayment(orgId: string, paymentId: string, input: Upd
   const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord = :clientCreditLimitAtRecord'];
   const removes: string[] = [];
   const values: Record<string, unknown> = { 
-    ':updatedAt': new Date().toISOString(),
+    ':updatedAt': getCurrentTimestampInTimezone(),
     ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
     ':clientCreditLimitAtRecord': client.creditLimit,
   };
@@ -461,7 +462,7 @@ export async function deletePayment(orgId: string, paymentId: string): Promise<b
     const clientId = existing.Item.clientId as string | undefined;
     const creditNoteId = existing.Item.creditNoteId as string | undefined;
     const amount = Number(existing.Item.amount ?? 0);
-    const now = new Date().toISOString();
+    const now = getCurrentTimestampInTimezone();
 
     let creditNoteUpdate:
       | {
@@ -628,7 +629,7 @@ export async function updateMonthlyPaymentsMetrics(orgId: string, date: Date = n
           },
           ExpressionAttributeValues: {
             ':value': totalAmount,
-            ':updatedAt': new Date().toISOString(),
+            ':updatedAt': getCurrentTimestampInTimezone(),
           },
         }),
       );

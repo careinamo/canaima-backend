@@ -9,6 +9,7 @@ import {
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { Client, ClientRecord, CreateClientInput, UpdateClientInput, ListClientsParams } from './types';
+import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
 
 const TABLE = process.env.TABLE_CLIENTS as string;
 const EMAIL_INDEX = 'emailIndex';
@@ -132,7 +133,7 @@ export async function listClients(
 }
 
 export async function createClient(orgId: string, input: CreateClientInput): Promise<Client> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const clientId = randomUUID();
 
   const record: ClientRecord = {
@@ -169,7 +170,7 @@ export async function createClientsBatch(
 ): Promise<{ created: Client[]; errors: Array<{ email: string; error: string }> }> {
   const created: Client[] = [];
   const errors: Array<{ email: string; error: string }> = [];
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
 
   // Check for duplicate emails across the batch and in DB
   const emailsInBatch = new Set<string>();
@@ -225,7 +226,7 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
 
   const sets: string[] = ['#updatedAt = :updatedAt'];
   const removes: string[] = [];
-  const values: Record<string, unknown> = { ':updatedAt': new Date().toISOString() };
+  const values: Record<string, unknown> = { ':updatedAt': getCurrentTimestampInTimezone() };
   const names: Record<string, string> = { '#updatedAt': 'updatedAt' };
 
   if (input.name !== undefined) {

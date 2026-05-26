@@ -1,3 +1,4 @@
+import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -213,7 +214,7 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     throw new CreditLimitExceededError(client.creditLimit, exceedAmount);
   }
 
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const noteId = crypto.randomUUID();
 
   // Generate or use provided number
@@ -313,7 +314,7 @@ export async function updateCreditNote(
   const sets: string[] = ['#updatedAt = :updatedAt', '#clientAccumulatedDebtAtRecord = :clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord = :clientCreditLimitAtRecord'];
   const removes: string[] = [];
   const values: Record<string, unknown> = { 
-    ':updatedAt': new Date().toISOString(),
+    ':updatedAt': getCurrentTimestampInTimezone(),
     ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
     ':clientCreditLimitAtRecord': client.creditLimit,
   };
@@ -423,7 +424,7 @@ export async function deleteCreditNote(orgId: string, noteId: string): Promise<b
 
     const clientId = existing.Item.clientId as string | undefined;
     const amount = Number(existing.Item.amount ?? 0);
-    const now = new Date().toISOString();
+    const now = getCurrentTimestampInTimezone();
 
     const transactItems: Array<Record<string, unknown>> = [];
 
@@ -536,7 +537,7 @@ export async function updateMonthlyCreditNotesMetrics(orgId: string, date: Date 
           },
           ExpressionAttributeValues: {
             ':value': totalAmount,
-            ':updatedAt': new Date().toISOString(),
+            ':updatedAt': getCurrentTimestampInTimezone(),
           },
         }),
       );

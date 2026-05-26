@@ -11,6 +11,7 @@ export interface Client {
   accumulatedDebt: number;
   lastPayment?: string;
   notes?: string;
+  timezone?: string; // Timezone for createdAt/updatedAt (e.g., 'America/Caracas')
   createdAt: string;
   updatedAt: string;
 }

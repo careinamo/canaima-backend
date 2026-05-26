@@ -1,3 +1,4 @@
+import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import type { Organization, OrganizationMember, ListOrgsByUserResult } from './types';
@@ -15,7 +16,7 @@ export async function upsertOrg(input: {
   currency?: string;
   createdBy: string;
 }): Promise<Organization> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const pk = `ORG#${input.clerkOrgId}`;
 
   const org: Organization = {
@@ -66,7 +67,7 @@ export async function updateOrg(
     plan?: string;
   },
 ): Promise<Organization> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const pk = `ORG#${clerkOrgId}`;
 
   const updateExpressionParts: string[] = [];
@@ -142,7 +143,7 @@ export async function addMember(input: {
   invitedBy?: string;
   status?: string;
 }): Promise<OrganizationMember> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const pk = `ORG#${input.clerkOrgId}`;
   const sk = `USER#${input.userId}`;
 

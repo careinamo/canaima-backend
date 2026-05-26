@@ -1,3 +1,4 @@
+import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { User, UpdateUserProfileInput } from './types';
@@ -15,7 +16,7 @@ export async function upsertUser(input: {
   lastName?: string;
   imageUrl?: string;
 }): Promise<User> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const pk = `USER#${input.clerkUserId}`;
 
   const user: User = {
@@ -58,7 +59,7 @@ export async function updateUserProfile(
   clerkUserId: string,
   updates: UpdateUserProfileInput,
 ): Promise<User> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const pk = `USER#${clerkUserId}`;
 
   const updateExpressionParts: string[] = [];
@@ -102,7 +103,7 @@ export async function updateUserProfile(
 export async function deleteUser(clerkUserId: string): Promise<void> {
   // Soft delete: just update updatedAt, or hard delete via DeleteCommand
   // For now, we'll do a soft approach by marking as deleted
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const pk = `USER#${clerkUserId}`;
 
   await ddb.send(
@@ -122,7 +123,7 @@ export async function deleteUser(clerkUserId: string): Promise<void> {
 }
 
 export async function recordLastSignIn(clerkUserId: string): Promise<void> {
-  const now = new Date().toISOString();
+  const now = getCurrentTimestampInTimezone();
   const pk = `USER#${clerkUserId}`;
 
   await ddb.send(
