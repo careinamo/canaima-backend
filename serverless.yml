@@ -74,6 +74,7 @@ provider:
             - events:RemoveTargets
           Resource:
             - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${AWS::StackName}-*"
+            - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/cn-*"
 
 plugins:
   - serverless-offline
