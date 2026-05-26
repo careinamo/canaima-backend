@@ -131,8 +131,8 @@ const seedClients = [
   },
   {
     id: '550e8400-e29b-41d4-a716-446655440007',
-    orgId: 'org-startupventures',
-    PK: 'org#org-startupventures',
+    orgId: 'org_3CEDZTEain9EFwWzrKaENHCM4Js',
+    PK: 'org#org_3CEDZTEain9EFwWzrKaENHCM4Js',
     SK: 'client#550e8400-e29b-41d4-a716-446655440007',
     name: 'StartUp Ventures Inc',
     email: 'contact@startupventures.com',

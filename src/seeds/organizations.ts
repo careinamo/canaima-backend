@@ -50,9 +50,9 @@ const seedOrganizations = [
     updatedAt: new Date().toISOString(),
   },
   {
-    PK: 'ORG#org-startupventures',
+    PK: 'ORG#org_3CEDZTEain9EFwWzrKaENHCM4Js',
     SK: 'META',
-    clerkOrgId: 'org-startupventures',
+    clerkOrgId: 'org_3CEDZTEain9EFwWzrKaENHCM4Js',
     name: 'StartUp Ventures',
     slug: 'startup-ventures',
     teamSize: 15,
