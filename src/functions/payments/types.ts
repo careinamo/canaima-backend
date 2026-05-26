@@ -36,7 +36,6 @@ export interface CreatePaymentInput {
   number?: string;
   creditNoteId: string;
   clientId: string;
-  invoiceNumber: string;
   amount: number;
   method: PaymentMethod;
   status?: PaymentStatus;

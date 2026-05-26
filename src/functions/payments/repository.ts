@@ -219,7 +219,7 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     clientId: input.clientId,
     clientIdGSI: input.clientId,
     clientName: client.name,
-    invoiceNumber: input.invoiceNumber,
+    invoiceNumber: creditNote.invoiceNumber as string,
     amount: input.amount,
     method: input.method,
     methodGSI: input.method,

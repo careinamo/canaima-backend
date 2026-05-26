@@ -176,7 +176,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"creditNoteId\": \"{{creditNoteId}}\",\n  \"amount\": 5000,\n  \"method\": \"bank_transfer\",\n  \"status\": \"confirmed\",\n  \"referenceNumber\": \"REF-2024-SV-001\",\n  \"description\": \"Payment for credit note\",\n  \"paymentDate\": \"2025-06-15T00:00:00Z\"\n}"
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"creditNoteId\": \"{{creditNoteId}}\",\n  \"amount\": 5000,\n  \"method\": \"bank_transfer\",\n  \"status\": \"confirmed\",\n  \"reference\": \"REF-2024-SV-001\",\n  \"description\": \"Payment for credit note\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/orgs/{{orgId}}/payments",

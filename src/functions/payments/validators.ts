@@ -23,10 +23,6 @@ export function validateCreatePayment(body: unknown): CreatePaymentInput {
     throw new ValidationError('clientId is required and must be a string');
   }
 
-  if (!input.invoiceNumber || typeof input.invoiceNumber !== 'string') {
-    throw new ValidationError('invoiceNumber is required and must be a string');
-  }
-
   if (typeof input.amount !== 'number' || input.amount <= 0) {
     throw new ValidationError('amount is required and must be a positive number');
   }
@@ -66,7 +62,6 @@ export function validateCreatePayment(body: unknown): CreatePaymentInput {
     number: input.number as string | undefined,
     creditNoteId: input.creditNoteId,
     clientId: input.clientId,
-    invoiceNumber: input.invoiceNumber,
     amount: input.amount,
     method: input.method as any,
     status: (input.status as 'confirmed' | 'pending' | 'rejected') || 'pending',
