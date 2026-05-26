@@ -36,6 +36,7 @@ export interface CreateCreditNoteInput {
   status?: CreditNoteStatus;
   dueDate: string;
   description?: string;
+  timezone?: string; // Optional: timezone for end-of-day calculation (e.g., 'America/Caracas'), defaults to America/Caracas
 }
 
 export interface UpdateCreditNoteInput {

@@ -128,7 +128,13 @@ export const createCreditNote = async (
 
     // Create EventBridge rule for credit note expiration (fires at end of dueDate)
     try {
-      await createCreditNoteExpirationRule(orgId, creditNote.id, creditNote.dueDate, creditNote.clientId);
+      await createCreditNoteExpirationRule(
+        orgId,
+        creditNote.id,
+        creditNote.dueDate,
+        creditNote.clientId,
+        input.timezone, // Pass timezone if provided, otherwise uses default
+      );
       console.log(`Created EventBridge rule for credit note ${creditNote.id}`);
     } catch (error) {
       console.error(`Failed to create EventBridge rule for credit note ${creditNote.id}:`, error);

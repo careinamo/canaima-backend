@@ -8,6 +8,7 @@ import {
 import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { createHash } from 'crypto';
+import { toDate } from 'date-fns-tz';
 
 const eventBridgeClient = new EventBridgeClient({});
 const lambdaClient = new LambdaClient({});
@@ -17,7 +18,11 @@ const stsClient = new STSClient({});
 const STACK_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME?.split('-').slice(0, -1).join('-') || 'canaima-backend';
 const STAGE = process.env.STAGE || 'dev';
 
-console.log('EventBridge Utilities initialized', { STACK_NAME, STAGE });
+// Default timezone for credit notes (Venezuela: UTC-4)
+// Can be overridden per organization or in environment variables
+const DEFAULT_TIMEZONE = process.env.CREDIT_NOTE_TIMEZONE || 'America/Caracas';
+
+console.log('EventBridge Utilities initialized', { STACK_NAME, STAGE, DEFAULT_TIMEZONE });
 
 /**
  * Generate a unique rule name for a credit note using a hash
@@ -39,32 +44,44 @@ export function generateRuleName(orgId: string, creditNoteId: string): string {
  * Create an EventBridge rule that fires at the end of a specific date
  * @param orgId Organization ID
  * @param creditNoteId Credit note ID
- * @param dueDate Date when the rule should fire (end of day 23:59:59 UTC)
+ * @param dueDate Date when the rule should fire (end of day in local timezone, converts to UTC)
  * @param clientId Client ID for the detail field
+ * @param timezone Optional timezone (defaults to America/Caracas). Examples: 'America/Caracas', 'America/New_York'
  */
 export async function createCreditNoteExpirationRule(
   orgId: string,
   creditNoteId: string,
   dueDate: string,
   clientId: string,
+  timezone: string = DEFAULT_TIMEZONE,
 ): Promise<string> {
   const ruleName = generateRuleName(orgId, creditNoteId);
 
   try {
-    // Parse the due date and set to end of day (23:59:59 UTC)
-    const date = new Date(dueDate);
-    date.setUTCHours(23, 59, 59, 999);
+    // Parse the due date (e.g., "2025-06-30T00:00:00Z" or "2025-06-30")
+    const inputDate = new Date(dueDate);
+    
+    // Get the date components in the local timezone
+    // We want to fire at 23:59:59 on the dueDate in the specified timezone
+    const dateStr = inputDate.toISOString().split('T')[0]; // Get YYYY-MM-DD in UTC
+    const endOfDayLocalStr = `${dateStr}T23:59:59`;
+    
+    // Convert end-of-day in local timezone to UTC
+    const utcDate = toDate(endOfDayLocalStr, { timeZone: timezone });
 
-    // Convert to cron expression
+    // Convert to cron expression (EventBridge uses UTC)
     // cron(minutes hours day-of-month month ? year)
-    const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-    const day = date.getUTCDate().toString().padStart(2, '0');
-    const year = date.getUTCFullYear();
+    const month = (utcDate.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = utcDate.getUTCDate().toString().padStart(2, '0');
+    const year = utcDate.getUTCFullYear();
+    const hours = utcDate.getUTCHours().toString().padStart(2, '0');
+    const minutes = utcDate.getUTCMinutes().toString().padStart(2, '0');
 
-    const cronExpression = `cron(59 23 ${day} ${month} ? ${year})`;
+    const cronExpression = `cron(${minutes} ${hours} ${day} ${month} ? ${year})`;
 
     console.log(
-      `Creating EventBridge rule: ${ruleName} with cron: ${cronExpression} (${dueDate})`,
+      `Creating EventBridge rule: ${ruleName} with cron: ${cronExpression}`,
+      `(dueDate: ${dueDate}, timezone: ${timezone}, utcTime: ${utcDate.toISOString()})`,
     );
 
     // Create the rule

@@ -27,6 +27,8 @@ provider:
     TABLE_ORGANIZATIONS: ${env:TABLE_ORGANIZATIONS_BASE, 'organizations'}-${self:provider.stage}
     TABLE_USERS: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
+    # Credit note timezone (default: Venezuela)
+    CREDIT_NOTE_TIMEZONE: ${env:CREDIT_NOTE_TIMEZONE, 'America/Caracas'}
   iam:
     role:
       statements:
