@@ -8,7 +8,7 @@ import {
 import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { createHash } from 'crypto';
-import { toDate } from 'date-fns-tz';
+import { toDate, toZonedTime } from 'date-fns-tz';
 
 const eventBridgeClient = new EventBridgeClient({});
 const lambdaClient = new LambdaClient({});
@@ -61,13 +61,34 @@ export async function createCreditNoteExpirationRule(
     // Parse the due date (e.g., "2025-06-30T00:00:00Z" or "2025-06-30")
     const inputDate = new Date(dueDate);
     
-    // Get the date components in the local timezone
-    // We want to fire at 23:59:59 on the dueDate in the specified timezone
-    const dateStr = inputDate.toISOString().split('T')[0]; // Get YYYY-MM-DD in UTC
-    const endOfDayLocalStr = `${dateStr}T23:59:59`;
+    // Get current time in the local timezone to check if dueDate is today
+    const now = new Date();
+    const nowInTimezone = toZonedTime(now, timezone);
+    const dueDateInTimezone = toZonedTime(inputDate, timezone);
     
-    // Convert end-of-day in local timezone to UTC
-    const utcDate = toDate(endOfDayLocalStr, { timeZone: timezone });
+    // Compare dates (only year, month, day)
+    const isToday = 
+      nowInTimezone.getFullYear() === dueDateInTimezone.getFullYear() &&
+      nowInTimezone.getMonth() === dueDateInTimezone.getMonth() &&
+      nowInTimezone.getDate() === dueDateInTimezone.getDate();
+    
+    let utcDate: Date;
+    
+    if (isToday) {
+      // If dueDate is today, fire 1 minute from now
+      utcDate = new Date(now.getTime() + 60 * 1000); // Add 60 seconds
+      console.log(
+        `Detected dueDate is TODAY. Scheduling rule to fire 1 minute from now.`,
+        `(now: ${now.toISOString()}, fireAt: ${utcDate.toISOString()})`,
+      );
+    } else {
+      // Otherwise, fire at end of day (23:59:59) on the dueDate in the specified timezone
+      const dateStr = inputDate.toISOString().split('T')[0]; // Get YYYY-MM-DD in UTC
+      const endOfDayLocalStr = `${dateStr}T23:59:59`;
+      
+      // Convert end-of-day in local timezone to UTC
+      utcDate = toDate(endOfDayLocalStr, { timeZone: timezone });
+    }
 
     // Convert to cron expression (EventBridge uses UTC)
     // cron(minutes hours day-of-month month ? year)
@@ -81,7 +102,7 @@ export async function createCreditNoteExpirationRule(
 
     console.log(
       `Creating EventBridge rule: ${ruleName} with cron: ${cronExpression}`,
-      `(dueDate: ${dueDate}, timezone: ${timezone}, utcTime: ${utcDate.toISOString()})`,
+      `(dueDate: ${dueDate}, timezone: ${timezone}, utcTime: ${utcDate.toISOString()}, isToday: ${isToday})`,
     );
 
     // Create the rule
