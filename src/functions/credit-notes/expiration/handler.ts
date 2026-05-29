@@ -18,13 +18,22 @@ export interface CreditNoteExpirationPayload {
  * - If paid < amount → status = 'overdue', mark client as delinquent
  */
 export async function processCreditNoteExpiration(
-  event: EventBridgeEvent<'Credit Note Expiration', CreditNoteExpirationPayload>,
+  event: any,
 ): Promise<{
   statusCode: number;
   body: string;
 }> {
   try {
-    const { creditNoteId, orgId, clientId } = event.detail;
+    console.log('Received event:', JSON.stringify(event, null, 2));
+
+    // EventBridge passes data in event.detail, but can also be passed directly
+    const payload = event.detail || event;
+
+    if (!payload || !payload.creditNoteId) {
+      throw new Error('Missing creditNoteId in event payload');
+    }
+
+    const { creditNoteId, orgId, clientId } = payload;
 
     console.log(
       `Processing credit note expiration: ${creditNoteId} for org ${orgId}, client ${clientId}`,

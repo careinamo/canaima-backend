@@ -17,12 +17,13 @@ const stsClient = new STSClient({});
 // Get these from CloudFormation stack name or environment
 const STACK_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME?.split('-').slice(0, -1).join('-') || 'canaima-backend';
 const STAGE = process.env.STAGE || 'dev';
+const EVENTBRIDGE_ROLE_ARN = process.env.EVENTBRIDGE_ROLE_ARN || '';
 
 // Default timezone for credit notes (Venezuela: UTC-4)
 // Can be overridden per organization or in environment variables
 const DEFAULT_TIMEZONE = process.env.CREDIT_NOTE_TIMEZONE || 'America/Caracas';
 
-console.log('EventBridge Utilities initialized', { STACK_NAME, STAGE, DEFAULT_TIMEZONE });
+console.log('EventBridge Utilities initialized', { STACK_NAME, STAGE, DEFAULT_TIMEZONE, EVENTBRIDGE_ROLE_ARN });
 
 /**
  * Generate a unique rule name for a credit note using a hash
@@ -67,18 +68,16 @@ export async function createCreditNoteExpirationRule(
     const dueDateInTimezone = toZonedTime(inputDate, timezone);
     
     // Compare dates (only year, month, day)
-    const isToday = 
-      nowInTimezone.getFullYear() === dueDateInTimezone.getFullYear() &&
-      nowInTimezone.getMonth() === dueDateInTimezone.getMonth() &&
-      nowInTimezone.getDate() === dueDateInTimezone.getDate();
+    // Check if dueDate is in the past
+    const isPast = dueDateInTimezone < nowInTimezone;
     
     let utcDate: Date;
     
-    if (isToday) {
-      // If dueDate is today, fire 1 minute from now
+    if (isPast) {
+      // If dueDate is in the past, fire 1 minute from now for immediate checking
       utcDate = new Date(now.getTime() + 60 * 1000); // Add 60 seconds
       console.log(
-        `Detected dueDate is TODAY. Scheduling rule to fire 1 minute from now.`,
+        `Detected dueDate is in the PAST. Scheduling rule to fire 1 minute from now.`,
         `(now: ${now.toISOString()}, fireAt: ${utcDate.toISOString()})`,
       );
     } else {
@@ -102,7 +101,7 @@ export async function createCreditNoteExpirationRule(
 
     console.log(
       `Creating EventBridge rule: ${ruleName} with cron: ${cronExpression}`,
-      `(dueDate: ${dueDate}, timezone: ${timezone}, utcTime: ${utcDate.toISOString()}, isToday: ${isToday})`,
+      `(dueDate: ${dueDate}, timezone: ${timezone}, utcTime: ${utcDate.toISOString()}, isPast: ${isPast})`,
     );
 
     // Create the rule
@@ -137,7 +136,9 @@ export async function createCreditNoteExpirationRule(
     const callerIdentity = await stsClient.send(new GetCallerIdentityCommand({}));
     const accountId = callerIdentity.Account;
 
-    const eventBridgeRoleArn = `arn:aws:iam::${accountId}:role/${STACK_NAME}-${STAGE}-eventbridge`;
+    if (!EVENTBRIDGE_ROLE_ARN) {
+      throw new Error('EVENTBRIDGE_ROLE_ARN environment variable not set');
+    }
 
     // Add Lambda as target to the rule
     await eventBridgeClient.send(
@@ -147,7 +148,7 @@ export async function createCreditNoteExpirationRule(
           {
             Id: '1',
             Arn: lambdaArn,
-            RoleArn: eventBridgeRoleArn,
+            RoleArn: EVENTBRIDGE_ROLE_ARN,
             // Pass credit note details to the Lambda
             Input: JSON.stringify({
               creditNoteId,
