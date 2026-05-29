@@ -28,15 +28,15 @@ export async function getActiveClientsForOrg(orgId: string): Promise<
         ':pk': pk,
         ':skPrefix': 'client#',
       },
-      ProjectionExpression: 'creditLimit, accumulatedDebt, #status',
+      ProjectionExpression: 'creditLimit, accumulatedDebt, #active',
       ExpressionAttributeNames: {
-        '#status': 'status',
+        '#active': 'active',
       },
     }),
   );
 
   // Filter only active clients
-  const activeClients = (result.Items ?? []).filter((item: any) => item.status === 'active');
+  const activeClients = (result.Items ?? []).filter((item: any) => item.active === true);
 
   return activeClients.map((item: any) => ({
     creditLimit: item.creditLimit || 0,
@@ -57,6 +57,7 @@ export async function calculateCreditUsage(orgId: string): Promise<{
   const clients = await getActiveClientsForOrg(orgId);
 
   if (clients.length === 0) {
+    console.log(`No active clients found for org: ${orgId}. Returning 0% usage.`);
     return {
       percentage: 0,
       totalAccumulatedDebt: 0,
@@ -64,7 +65,7 @@ export async function calculateCreditUsage(orgId: string): Promise<{
       activeClientsCount: 0,
     };
   }
-
+  console.log(`Found ${clients.length} active clients for org: ${orgId}. Calculating usage...`);
   const totalAccumulatedDebt = clients.reduce((sum, c) => sum + (c.accumulatedDebt || 0), 0);
   const totalCreditLimit = clients.reduce((sum, c) => sum + (c.creditLimit || 0), 0);
 
