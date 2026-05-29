@@ -267,7 +267,8 @@ curl http://localhost:3000/orgs/org-default/clients/550e8400-e29b-41d4-a716-4466
   "email": "contact@acme.com",
   "phone": "+1-555-0100",
   "address": "123 Business Ave, New York, NY 10001",
-  "status": "active",
+  "active": true,
+  "delinquent": false,
   "creditLimit": 50000,
   "accumulatedDebt": 12500,
   "lastPayment": "2025-05-08T00:00:00.000Z",
@@ -531,7 +532,8 @@ Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,Referre
       "email": "contact@acme.com",
       "phone": "+1-555-0100",
       "address": "123 Main St",
-      "status": "active",
+      "active": true,
+      "delinquent": false,
       "creditLimit": 50000,
       "accumulatedDebt": 0,
       "notes": "Key account",
@@ -632,6 +634,14 @@ The endpoint uses an all-or-nothing approach per row:
 The Credit Notes module provides REST API endpoints for managing B2B credit notes (adjustments, allowances, and credits) for invoices. All endpoints are namespaced under `/orgs/{orgId}/credit-notes` and scoped by organization.
 
 **Credit Limit Integration:** Creating a credit note increases the client's `accumulatedDebt`. The system prevents credit note creation if it would cause `accumulatedDebt` to exceed the client's `creditLimit`.
+
+**Event-Driven Architecture:** All credit note CRUD operations (create, update, delete) trigger asynchronous credit usage calculation events. These events are published to AWS EventBridge and routed to an SQS queue, where a dedicated Lambda consumer processes them to recalculate credit usage metrics. This asynchronous, decoupled architecture ensures CRUD operations remain fast while expensive calculations run independently.
+
+**Lambda Timeout:** All credit note CRUD Lambda functions (`listCreditNotes`, `getCreditNote`, `createCreditNote`, `updateCreditNote`, `deleteCreditNote`) have a timeout of **29 seconds** to ensure sufficient time for processing before the API Gateway hard timeout of 30 seconds.
+
+**Event-Driven Architecture:** All credit note CRUD operations (create, update, delete) trigger asynchronous credit usage calculation events. These events are published to AWS EventBridge and routed to an SQS queue, where a dedicated Lambda consumer processes them to recalculate credit usage metrics. This asynchronous, decoupled architecture ensures CRUD operations remain fast while expensive calculations run independently.
+
+**Lambda Timeout:** All credit note CRUD Lambda functions (`listCreditNotes`, `getCreditNote`, `createCreditNote`, `updateCreditNote`, `deleteCreditNote`) have a timeout of **29 seconds** to ensure sufficient time for processing before the API Gateway hard timeout of 30 seconds.
 
 ### Endpoints Table
 
@@ -1435,7 +1445,8 @@ curl -X DELETE "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41
 | `emailLower` | String | Lowercase email for unique lookups | Internal use |
 | `phone` | String | Client's phone number | Optional |
 | `address` | String | Client's physical address | Optional |
-| `status` | String | Client status: `active`, `inactive`, `overdue` | - |
+| `active` | Boolean | Whether the client is active | Default: true |
+| `delinquent` | Boolean | Whether the client is delinquent | Default: false |
 | `creditLimit` | Number | Maximum credit available to the client | Default: 0 |
 | `accumulatedDebt` | Number | Client's accumulated outstanding debt | Increased by credit notes and decreased by payments |
 | `lastPayment` | String | ISO 8601 timestamp of last payment | Optional |
@@ -1469,7 +1480,8 @@ This index enables fast lookups to verify email uniqueness during client creatio
   "emailLower": "contact@acme.com",
   "phone": "+1-555-0100",
   "address": "123 Business Ave, New York, NY 10001",
-  "status": "active",
+  "active": true,
+  "delinquent": false,
   "creditLimit": 50000,
   "accumulatedDebt": 12500,
   "lastPayment": "2025-05-08T00:00:00.000Z",
@@ -1703,6 +1715,58 @@ Deploy to `prod`:
 ```bash
 npm run deploy:prod -- --region us-east-2
 ```
+
+---
+
+## Credit Usage Calculation & Event-Driven Architecture
+
+### Overview
+
+The Canaima backend uses an **event-driven architecture** for credit usage calculations, decoupling CRUD operations from resource-intensive metrics computation.
+
+### How It Works
+
+1. **Trigger**: When a credit note or payment is created, updated, or deleted, the Lambda function emits an event to AWS EventBridge with:
+   - `Source`: `canaima.creditusage`
+   - `DetailType`: `CreditUsageCalculationRequested`
+   - `Detail`: Contains `orgId` (which organization needs metrics recalculation) and `timestamp`
+
+2. **EventBridge Rule**: An EventBridge rule matches events with `source='canaima.creditusage'` and routes them to an AWS SQS queue (`CreditUsageQueue`) for durable, ordered processing.
+
+3. **SQS Queue**: Messages are batched and processed efficiently:
+   - **Batch Size**: Up to 10 messages per batch
+   - **Batch Window**: 5 seconds max wait before processing even if fewer than 10 messages
+   - **Visibility Timeout**: 300 seconds (5 minutes) to allow Lambda time to process
+   - **Message Retention**: 14 days for reliability
+
+4. **Lambda Consumer** (`calculateCreditUsageSQS`): A dedicated Lambda function:
+   - Polls the SQS queue for messages
+   - Extracts the `orgId` from each message
+   - Calls the credit usage calculation function: `calculateCreditUsage(orgId)`
+   - Stores the result in the metrics table: `saveCreditUsageRecord(orgId, usage)`
+   - Returns failed message IDs for automatic retry via SQS
+
+5. **Dead Letter Queue** (`CreditUsageDLQ`): If a message fails processing 3 times, it's automatically sent to the DLQ for manual inspection and debugging.
+
+### Benefits of Event-Driven Architecture
+
+- **Decoupling**: CRUD operations don't wait for metrics recalculation
+- **Scalability**: Lambda auto-scales to process messages efficiently
+- **Reliability**: SQS ensures no events are lost with built-in retries and DLQ
+- **Cost-Effective**: Pay only for actual Lambda execution, not for idle connections
+
+### Credit Usage Calculation Logic
+
+The calculation computes a percentage-based metric:
+
+**Formula:** `creditUsage = (Total Accumulated Debt / Total Credit Limit) × 100`
+
+- Queries all active clients in an organization from the clients table
+- Sums their `accumulatedDebt` and `creditLimit` values
+- Calculates the ratio as a percentage
+- Stores the result in the metrics table with a timestamp and organization ID
+
+This metric helps understand portfolio risk: a high credit usage percentage indicates clients are collectively using most of their available credit.
 
 ---
 
