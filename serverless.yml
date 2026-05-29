@@ -161,6 +161,7 @@ functions:
   # ===== Credit Notes endpoints =====
   listCreditNotes:
     handler: src/functions/credit-notes/handler.listCreditNotes
+    timeout: 29
     events:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
@@ -168,6 +169,7 @@ functions:
 
   getCreditNote:
     handler: src/functions/credit-notes/handler.getCreditNote
+    timeout: 29
     events:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
@@ -175,6 +177,7 @@ functions:
 
   createCreditNote:
     handler: src/functions/credit-notes/handler.createCreditNote
+    timeout: 29
     events:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
@@ -182,6 +185,7 @@ functions:
 
   updateCreditNote:
     handler: src/functions/credit-notes/handler.updateCreditNote
+    timeout: 29
     events:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
@@ -189,6 +193,7 @@ functions:
 
   deleteCreditNote:
     handler: src/functions/credit-notes/handler.deleteCreditNote
+    timeout: 29
     events:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
