@@ -17,13 +17,12 @@ const stsClient = new STSClient({});
 // Get these from CloudFormation stack name or environment
 const STACK_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME?.split('-').slice(0, -1).join('-') || 'canaima-backend';
 const STAGE = process.env.STAGE || 'dev';
-const EVENTBRIDGE_ROLE_ARN = process.env.EVENTBRIDGE_ROLE_ARN || '';
 
 // Default timezone for credit notes (Venezuela: UTC-4)
 // Can be overridden per organization or in environment variables
 const DEFAULT_TIMEZONE = process.env.CREDIT_NOTE_TIMEZONE || 'America/Caracas';
 
-console.log('EventBridge Utilities initialized', { STACK_NAME, STAGE, DEFAULT_TIMEZONE, EVENTBRIDGE_ROLE_ARN });
+console.log('EventBridge Utilities initialized', { STACK_NAME, STAGE, DEFAULT_TIMEZONE });
 
 /**
  * Generate a unique rule name for a credit note using a hash
@@ -136,9 +135,9 @@ export async function createCreditNoteExpirationRule(
     const callerIdentity = await stsClient.send(new GetCallerIdentityCommand({}));
     const accountId = callerIdentity.Account;
 
-    if (!EVENTBRIDGE_ROLE_ARN) {
-      throw new Error('EVENTBRIDGE_ROLE_ARN environment variable not set');
-    }
+    // Construct the EventBridge role ARN dynamically
+    // For serverless-offline and deployed environments
+    const eventBridgeRoleArn = `arn:aws:iam::${accountId}:role/${STACK_NAME}-EventBridgeInvokeLambdaRole`;
 
     // Add Lambda as target to the rule
     await eventBridgeClient.send(
@@ -148,7 +147,7 @@ export async function createCreditNoteExpirationRule(
           {
             Id: '1',
             Arn: lambdaArn,
-            RoleArn: EVENTBRIDGE_ROLE_ARN,
+            RoleArn: eventBridgeRoleArn,
             // Pass credit note details to the Lambda
             Input: JSON.stringify({
               creditNoteId,

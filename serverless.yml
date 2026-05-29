@@ -29,8 +29,6 @@ provider:
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
     # Credit note timezone (default: Venezuela)
     CREDIT_NOTE_TIMEZONE: ${env:CREDIT_NOTE_TIMEZONE, 'America/Caracas'}
-    # EventBridge role ARN (will be set after first deploy)
-    EVENTBRIDGE_ROLE_ARN: !GetAtt EventBridgeInvokeLambdaRole.Arn
   iam:
     role:
       statements:
