@@ -37,7 +37,7 @@ export function validateCreatePayment(body: unknown): CreatePaymentInput {
   }
 
   // Validate optional status
-  if (input.status && !['confirmed', 'pending', 'rejected'].includes(input.status)) {
+  if (input.status && !['confirmed', 'pending', 'rejected'].includes(String(input.status))) {
     throw new ValidationError('status must be one of: confirmed, pending, rejected');
   }
 
@@ -94,11 +94,11 @@ export function validateUpdatePayment(body: unknown): UpdatePaymentInput {
     throw new ValidationError('amount must be a positive number');
   }
 
-  if (input.method && !['cash', 'bank_transfer', 'mobile_payment', 'credit_card', 'other'].includes(input.method)) {
+  if (input.method && !['cash', 'bank_transfer', 'mobile_payment', 'credit_card', 'other'].includes(String(input.method))) {
     throw new ValidationError('method must be one of: cash, bank_transfer, mobile_payment, credit_card, other');
   }
 
-  if (input.status && !['confirmed', 'pending', 'rejected'].includes(input.status)) {
+  if (input.status && !['confirmed', 'pending', 'rejected'].includes(String(input.status))) {
     throw new ValidationError('status must be one of: confirmed, pending, rejected');
   }
 

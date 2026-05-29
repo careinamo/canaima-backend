@@ -42,7 +42,7 @@ export function validateCreateCreditNote(body: unknown): CreateCreditNoteInput {
   }
 
   // Validate status if provided
-  if (input.status && !['pending', 'partial', 'paid'].includes(input.status)) {
+  if (input.status && !['pending', 'partial', 'paid'].includes(String(input.status))) {
     throw new ValidationError('status must be one of: pending, partial, paid');
   }
 
@@ -101,7 +101,7 @@ export function validateUpdateCreditNote(body: unknown): UpdateCreditNoteInput {
     }
   }
 
-  if (input.status && !['pending', 'partial', 'paid'].includes(input.status)) {
+  if (input.status && !['pending', 'partial', 'paid'].includes(String(input.status))) {
     throw new ValidationError('status must be one of: pending, partial, paid');
   }
 
