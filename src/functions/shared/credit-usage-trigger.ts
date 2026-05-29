@@ -1,29 +1,37 @@
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 
-const lambda = new LambdaClient({});
+const eventBridge = new EventBridgeClient({});
 
 /**
- * Invoke the credit usage calculation Lambda asynchronously
+ * Publish credit usage calculation event to EventBridge
+ * EventBridge will route to SQS, which will trigger the processing Lambda
  * Does not wait for response to avoid blocking the API
  */
 export async function triggerCreditUsageCalculation(orgId: string): Promise<void> {
   try {
-    const stage = process.env.NODE_ENV || 'dev';
-    const functionName = `canaima-backend-${stage}-calculateCreditUsageEvent`;
-    
-    await lambda.send(
-      new InvokeCommand({
-        FunctionName: functionName,
-        InvocationType: 'Event', // Asynchronous invocation
-        Payload: JSON.stringify({
-          orgId,
-        }),
+    const eventBusName = 'default';
+    const eventSource = 'canaima.creditusage';
+    const detailType = 'CreditUsageCalculationRequested';
+
+    await eventBridge.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: eventSource,
+            DetailType: detailType,
+            EventBusName: eventBusName,
+            Detail: JSON.stringify({
+              orgId,
+              timestamp: new Date().toISOString(),
+            }),
+          },
+        ],
       }),
     );
 
-    console.log(`Triggered credit usage calculation for org: ${orgId}`);
+    console.log(`Published credit usage calculation event for org: ${orgId}`);
   } catch (error) {
-    // Don't fail the main operation if credit usage calculation fails
-    console.warn('Failed to trigger credit usage calculation:', error);
+    // Don't fail the main operation if event publishing fails
+    console.warn('Failed to publish credit usage calculation event:', error);
   }
 }

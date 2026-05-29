@@ -74,9 +74,18 @@ provider:
             - events:DeleteRule
             - events:PutTargets
             - events:RemoveTargets
+            - events:PutEvents
           Resource:
             - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${AWS::StackName}-*"
             - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/cn-*"
+            - "*" # PutEvents doesn't use resource ARNs
+        - Effect: Allow
+          Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - !GetAtt CreditUsageQueue.Arn
         - Effect: Allow
           Action:
             - iam:PassRole
@@ -236,6 +245,15 @@ functions:
 
   calculateCreditUsageEvent:
     handler: src/functions/credit-usage/handler.eventDrivenHandler
+
+  # ===== Credit Usage SQS Consumer =====
+  calculateCreditUsageSQS:
+    handler: src/functions/credit-usage/sqs-handler.calculateCreditUsageSQS
+    events:
+      - sqs:
+          arn: !GetAtt CreditUsageQueue.Arn
+          batchSize: 10
+          maximumBatchingWindowInSeconds: 5
 
   # ===== Organizations endpoints =====
   listUserOrganizations:
@@ -494,7 +512,63 @@ resources:
           AttributeName: ttl
           Enabled: true
 
-    # ===== EventBridge IAM Role =====
+    # ===== SQS Queue for Credit Usage Calculation =====
+    CreditUsageQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-credit-usage-queue
+        VisibilityTimeout: 300 # 5 minutes for Lambda timeout
+        MessageRetentionPeriod: 1209600 # 14 days
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CreditUsageDLQ.Arn
+          maxReceiveCount: 3
+
+    CreditUsageDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-credit-usage-dlq
+        MessageRetentionPeriod: 1209600 # 14 days
+
+    # ===== EventBridge IAM Role for sending to SQS =====
+    EventBridgeToSQSRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: SendToSQS
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                  Resource: !GetAtt CreditUsageQueue.Arn
+
+    # ===== EventBridge Rule: Route credit usage events to SQS =====
+    CreditUsageEventRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventBusName: default
+        Name: ${self:service}-${self:provider.stage}-credit-usage-rule
+        Description: Route credit usage calculation events to SQS
+        EventPattern:
+          source:
+            - canaima.creditusage
+          detail-type:
+            - CreditUsageCalculationRequested
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt CreditUsageQueue.Arn
+            RoleArn: !GetAtt EventBridgeToSQSRole.Arn
+            Id: CreditUsageQueueTarget
+
+    # ===== EventBridge IAM Role for Lambda invocation =====
     EventBridgeInvokeLambdaRole:
       Type: AWS::IAM::Role
       Properties:
