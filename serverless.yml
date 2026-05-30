@@ -83,7 +83,7 @@ provider:
             - sqs:DeleteMessage
             - sqs:GetQueueAttributes
           Resource:
-            - !GetAtt CreditUsageQueue.Arn
+            - !GetAtt MetricsQueue.Arn
         - Effect: Allow
           Action:
             - iam:PassRole
@@ -249,12 +249,12 @@ functions:
   calculateCreditUsageEvent:
     handler: src/functions/credit-usage/handler.eventDrivenHandler
 
-  # ===== Credit Usage SQS Consumer =====
-  calculateCreditUsageSQS:
-    handler: src/functions/credit-usage/sqs-handler.calculateCreditUsageSQS
+  # ===== Unified Metrics SQS Consumer =====
+  calculateMetrics:
+    handler: src/functions/credit-usage/metrics-handler.calculateMetrics
     events:
       - sqs:
-          arn: !GetAtt CreditUsageQueue.Arn
+          arn: !GetAtt MetricsQueue.Arn
           batchSize: 10
           maximumBatchingWindowInSeconds: 5
 
@@ -515,25 +515,25 @@ resources:
           AttributeName: ttl
           Enabled: true
 
-    # ===== SQS Queue for Credit Usage Calculation =====
-    CreditUsageQueue:
+    # ===== SQS Queue for Metrics Calculations =====
+    MetricsQueue:
       Type: AWS::SQS::Queue
       Properties:
-        QueueName: ${self:service}-${self:provider.stage}-credit-usage-queue
+        QueueName: ${self:service}-${self:provider.stage}-metrics-queue
         VisibilityTimeout: 300 # 5 minutes for Lambda timeout
         MessageRetentionPeriod: 1209600 # 14 days
         RedrivePolicy:
-          deadLetterTargetArn: !GetAtt CreditUsageDLQ.Arn
+          deadLetterTargetArn: !GetAtt MetricsDLQ.Arn
           maxReceiveCount: 3
 
-    CreditUsageDLQ:
+    MetricsDLQ:
       Type: AWS::SQS::Queue
       Properties:
-        QueueName: ${self:service}-${self:provider.stage}-credit-usage-dlq
+        QueueName: ${self:service}-${self:provider.stage}-metrics-dlq
         MessageRetentionPeriod: 1209600 # 14 days
 
-    # ===== EventBridge IAM Role for sending to SQS =====
-    EventBridgeToSQSRole:
+    # ===== EventBridge IAM Role for sending to Metrics SQS Queue =====
+    EventBridgeToMetricsQueueRole:
       Type: AWS::IAM::Role
       Properties:
         AssumeRolePolicyDocument:
@@ -544,32 +544,33 @@ resources:
                 Service: events.amazonaws.com
               Action: sts:AssumeRole
         Policies:
-          - PolicyName: SendToSQS
+          - PolicyName: SendToMetricsQueue
             PolicyDocument:
               Version: '2012-10-17'
               Statement:
                 - Effect: Allow
                   Action:
                     - sqs:SendMessage
-                  Resource: !GetAtt CreditUsageQueue.Arn
+                  Resource: !GetAtt MetricsQueue.Arn
 
-    # ===== EventBridge Rule: Route credit usage events to SQS =====
-    CreditUsageEventRule:
+    # ===== EventBridge Rule: Route all metrics events to SQS =====
+    MetricsEventRule:
       Type: AWS::Events::Rule
       Properties:
         EventBusName: default
-        Name: ${self:service}-${self:provider.stage}-credit-usage-rule
-        Description: Route credit usage calculation events to SQS
+        Name: ${self:service}-${self:provider.stage}-metrics-rule
+        Description: Route all metrics calculation events (credit usage and credit notes) to SQS
         EventPattern:
           source:
-            - canaima.creditusage
+            - canaima.metrics
           detail-type:
             - CreditUsageCalculationRequested
+            - CreditNoteMetricsUpdateRequested
         State: ENABLED
         Targets:
-          - Arn: !GetAtt CreditUsageQueue.Arn
-            RoleArn: !GetAtt EventBridgeToSQSRole.Arn
-            Id: CreditUsageQueueTarget
+          - Arn: !GetAtt MetricsQueue.Arn
+            RoleArn: !GetAtt EventBridgeToMetricsQueueRole.Arn
+            Id: MetricsQueueTarget
 
     # ===== EventBridge IAM Role for Lambda invocation =====
     EventBridgeInvokeLambdaRole:

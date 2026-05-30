@@ -1,4 +1,5 @@
 import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
+import { publishMetricsEvent } from '../shared/metrics-trigger';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -280,9 +281,9 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     }),
   );
 
-  // Update monthly credit notes metrics asynchronously
-  updateMonthlyCreditNotesMetrics(orgId).catch(err =>
-    console.warn('Failed to update monthly credit notes metrics:', err),
+  // Publish credit note metrics update event asynchronously
+  publishMetricsEvent('CreditNoteMetricsUpdateRequested', orgId).catch(err =>
+    console.warn('Failed to publish credit note metrics event:', err),
   );
 
   return toCreditNote(record as unknown as Record<string, unknown>);
@@ -395,10 +396,10 @@ export async function updateCreditNote(
       }),
     );
     
-    // Update monthly credit notes metrics if amount changed
+    // Publish credit note metrics update event if amount changed
     if (input.amount !== undefined) {
-      updateMonthlyCreditNotesMetrics(orgId).catch(err =>
-        console.warn('Failed to update monthly credit notes metrics:', err),
+      publishMetricsEvent('CreditNoteMetricsUpdateRequested', orgId).catch(err =>
+        console.warn('Failed to publish credit note metrics event:', err),
       );
     }
     
@@ -464,9 +465,9 @@ export async function deleteCreditNote(orgId: string, noteId: string): Promise<b
       }),
     );
 
-    // Update monthly credit notes metrics asynchronously
-    updateMonthlyCreditNotesMetrics(orgId).catch(err =>
-      console.warn('Failed to update monthly credit notes metrics:', err),
+    // Publish credit note metrics update event asynchronously
+    publishMetricsEvent('CreditNoteMetricsUpdateRequested', orgId).catch(err =>
+      console.warn('Failed to publish credit note metrics event:', err),
     );
 
     return true;
