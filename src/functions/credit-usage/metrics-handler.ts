@@ -10,6 +10,8 @@ console.log('Unified Metrics Handler initialized');
  * Routes to appropriate handler based on event type:
  * - CreditUsageCalculationRequested: calculates credit usage percentage
  * - CreditNoteMetricsUpdateRequested: updates monthly credit notes totals
+ * - CreditNoteCreated/Updated/Deleted: triggers monthly metrics update
+ * - PaymentCreated/Updated/Deleted: triggers monthly metrics update
  */
 export const calculateMetrics = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   console.log('Metrics SQS handler triggered');
@@ -55,10 +57,20 @@ export const calculateMetrics = async (event: SQSEvent): Promise<SQSBatchRespons
         result = await creditUsageRepo.saveCreditUsageRecord(orgId, usage);
         console.log(`Saved credit usage record for org ${orgId}:`, JSON.stringify(result));
       } else if (eventType === 'CreditNoteMetricsUpdateRequested') {
-        // Update monthly credit notes metrics
+        // Update monthly credit notes metrics (legacy event type)
         await creditNotesRepo.updateMonthlyCreditNotesMetrics(orgId);
         result = { type: 'monthly_metrics_updated', orgId };
         console.log(`Updated monthly credit notes metrics for org ${orgId}`);
+      } else if (eventType === 'CreditNoteCreated' || eventType === 'CreditNoteUpdated' || eventType === 'CreditNoteDeleted') {
+        // CRUD events: trigger monthly credit notes metrics update
+        await creditNotesRepo.updateMonthlyCreditNotesMetrics(orgId);
+        result = { type: 'monthly_metrics_updated_from_crud', eventType, orgId };
+        console.log(`Updated monthly credit notes metrics for org ${orgId} (triggered by ${eventType})`);
+      } else if (eventType === 'PaymentCreated' || eventType === 'PaymentUpdated' || eventType === 'PaymentDeleted') {
+        // Payment CRUD events: in the future could trigger additional payment-related metrics
+        // For now, just log the event
+        result = { type: 'payment_crud_event_received', eventType, orgId };
+        console.log(`Received ${eventType} event for org ${orgId}`);
       } else {
         throw new Error(`Unknown event type: ${eventType}`);
       }

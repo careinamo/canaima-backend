@@ -4,6 +4,7 @@ import * as repo from './repository';
 import { CreditLimitExceededError } from './repository';
 import type { CreditNote, CreditNoteStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
+import { publishCrudEvent } from '../shared/crud-trigger';
 import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule, generateRuleName } from './eventbridge-utils';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { EventBridgeClient, DescribeRuleCommand } from '@aws-sdk/client-eventbridge';
@@ -134,6 +135,11 @@ export const createCreditNote = async (
 
     const creditNote = await repo.createCreditNote(orgId, input);
 
+    // Publish CreditNoteCreated CRUD event
+    publishCrudEvent('CreditNoteCreated', orgId, creditNote.id, creditNote).catch(err =>
+      console.warn('Failed to publish CreditNoteCreated event:', err)
+    );
+
     // Create EventBridge rule for credit note expiration (fires at end of dueDate)
     try {
       await createCreditNoteExpirationRule(
@@ -202,6 +208,11 @@ export const updateCreditNote = async (
     const creditNote = await repo.updateCreditNote(orgId, id, input);
     if (!creditNote) return clientError(404, 'Credit note not found');
 
+    // Publish CreditNoteUpdated CRUD event
+    publishCrudEvent('CreditNoteUpdated', orgId, creditNote.id, creditNote).catch(err =>
+      console.warn('Failed to publish CreditNoteUpdated event:', err)
+    );
+
     // Trigger credit usage calculation asynchronously
     triggerCreditUsageCalculation(orgId).catch(err => 
       console.warn('Failed to trigger credit usage calculation:', err)
@@ -240,6 +251,11 @@ export const deleteCreditNote = async (
 
     const deleted = await repo.deleteCreditNote(orgId, id);
     if (!deleted) return clientError(404, 'Credit note not found');
+
+    // Publish CreditNoteDeleted CRUD event
+    publishCrudEvent('CreditNoteDeleted', orgId, id).catch(err =>
+      console.warn('Failed to publish CreditNoteDeleted event:', err)
+    );
 
     // Trigger credit usage calculation asynchronously
     triggerCreditUsageCalculation(orgId).catch(err => 

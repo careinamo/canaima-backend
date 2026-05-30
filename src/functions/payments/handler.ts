@@ -3,6 +3,7 @@ import { ValidationError, validateCreatePayment, validateUpdatePayment } from '.
 import * as repo from './repository';
 import type { PaymentMethod, PaymentStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
+import { publishCrudEvent } from '../shared/crud-trigger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -130,6 +131,11 @@ export const createPayment = async (
 
     const payment = await repo.createPayment(orgId, input);
     
+    // Publish PaymentCreated CRUD event
+    publishCrudEvent('PaymentCreated', orgId, payment.id, payment).catch(err =>
+      console.warn('Failed to publish PaymentCreated event:', err)
+    );
+    
     // Trigger credit usage calculation asynchronously
     triggerCreditUsageCalculation(orgId).catch(err => 
       console.warn('Failed to trigger credit usage calculation:', err)
@@ -179,6 +185,11 @@ export const updatePayment = async (
     const payment = await repo.updatePayment(orgId, id, input);
     if (!payment) return clientError(404, 'Payment not found');
 
+    // Publish PaymentUpdated CRUD event
+    publishCrudEvent('PaymentUpdated', orgId, payment.id, payment).catch(err =>
+      console.warn('Failed to publish PaymentUpdated event:', err)
+    );
+
     // Trigger credit usage calculation asynchronously
     triggerCreditUsageCalculation(orgId).catch(err => 
       console.warn('Failed to trigger credit usage calculation:', err)
@@ -208,6 +219,11 @@ export const deletePayment = async (
 
     const deleted = await repo.deletePayment(orgId, id);
     if (!deleted) return clientError(404, 'Payment not found');
+
+    // Publish PaymentDeleted CRUD event
+    publishCrudEvent('PaymentDeleted', orgId, id).catch(err =>
+      console.warn('Failed to publish PaymentDeleted event:', err)
+    );
 
     // Trigger credit usage calculation asynchronously
     triggerCreditUsageCalculation(orgId).catch(err => 

@@ -593,13 +593,20 @@ resources:
       Properties:
         EventBusName: default
         Name: ${self:service}-${self:provider.stage}-metrics-rule
-        Description: Route all metrics calculation events (credit usage and credit notes) to SQS
+        Description: Route all metrics calculation events (credit usage, credit notes, and CRUD events) to SQS
         EventPattern:
           source:
             - canaima.metrics
+            - canaima.crud
           detail-type:
             - CreditUsageCalculationRequested
             - CreditNoteMetricsUpdateRequested
+            - CreditNoteCreated
+            - CreditNoteUpdated
+            - CreditNoteDeleted
+            - PaymentCreated
+            - PaymentUpdated
+            - PaymentDeleted
         State: ENABLED
         Targets:
           - Arn: !GetAtt MetricsQueue.Arn
