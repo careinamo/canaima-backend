@@ -4,7 +4,9 @@ import * as repo from './repository';
 import { CreditLimitExceededError } from './repository';
 import type { CreditNote, CreditNoteStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
-import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule } from './eventbridge-utils';
+import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule, generateRuleName } from './eventbridge-utils';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { EventBridgeClient, DescribeRuleCommand } from '@aws-sdk/client-eventbridge';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -25,6 +27,12 @@ const clientError = (statusCode: number, message: string) =>
   respond(statusCode, { error: message });
 
 const serverError = () => respond(500, { error: 'Internal server error' });
+
+// Initialize AWS clients
+const lambdaClient = new LambdaClient({});
+const eventBridgeClient = new EventBridgeClient({});
+
+const STACK_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME?.split('-').slice(0, -1).join('-') || 'canaima-backend';
 
 console.log('TABLE_CREDIT_NOTES env var:', process.env.TABLE_CREDIT_NOTES);
 
@@ -241,6 +249,125 @@ export const deleteCreditNote = async (
     return respond(200, { success: true, message: 'Credit note deleted' });
   } catch (error) {
     console.error('deleteCreditNote error:', error);
+    return serverError();
+  }
+};
+
+// ---------------------------------------------------------------------------
+// POST /orgs/{orgId}/credit-notes/{id}/manual-check-expiration (DEBUG)
+// ---------------------------------------------------------------------------
+
+/**
+ * Manual endpoint to invoke credit note expiration checking
+ * Useful for testing locally without waiting for EventBridge cron
+ */
+export const checkExpirationManual = async (
+  event: APIGatewayProxyEventV2,
+): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const orgId = event.pathParameters?.orgId;
+    const noteId = event.pathParameters?.id;
+    
+    if (!orgId) return clientError(400, 'Missing orgId');
+    if (!noteId) return clientError(400, 'Missing credit note id');
+
+    console.log(`Manual expiration check triggered for note ${noteId} in org ${orgId}`);
+
+    // Get the credit note to retrieve clientId
+    const creditNote = await repo.getCreditNoteById(orgId, noteId);
+    if (!creditNote) {
+      return clientError(404, 'Credit note not found');
+    }
+
+    // Invoke the processCreditNoteExpiration Lambda manually
+    const functionName = `${STACK_NAME}-processCreditNoteExpiration`;
+    
+    const result = await lambdaClient.send(
+      new InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'RequestResponse',
+        Payload: JSON.stringify({
+          detail: {
+            creditNoteId: noteId,
+            orgId,
+            clientId: creditNote.clientId,
+          },
+        }),
+      }),
+    );
+
+    let responsePayload: any;
+    if (result.Payload) {
+      responsePayload = JSON.parse(new TextDecoder().decode(result.Payload as Uint8Array));
+    }
+
+    console.log(`Manual expiration check completed. Response:`, responsePayload);
+
+    return respond(200, {
+      success: true,
+      message: 'Manual expiration check executed',
+      lambdaResponse: responsePayload,
+      statusCode: result.StatusCode,
+    });
+  } catch (error) {
+    console.error('checkExpirationManual error:', error);
+    return serverError();
+  }
+};
+
+// ---------------------------------------------------------------------------
+// GET /orgs/{orgId}/credit-notes/{id}/expiration-rule-status (DEBUG)
+// ---------------------------------------------------------------------------
+
+/**
+ * Debug endpoint to check if EventBridge rule exists and its status
+ */
+export const getExpirationRuleStatus = async (
+  event: APIGatewayProxyEventV2,
+): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const orgId = event.pathParameters?.orgId;
+    const noteId = event.pathParameters?.id;
+    
+    if (!orgId) return clientError(400, 'Missing orgId');
+    if (!noteId) return clientError(400, 'Missing credit note id');
+
+    const ruleName = generateRuleName(orgId, noteId);
+
+    console.log(`Checking EventBridge rule status: ${ruleName}`);
+
+    try {
+      const ruleInfo = await eventBridgeClient.send(
+        new DescribeRuleCommand({
+          Name: ruleName,
+        }),
+      );
+
+      return respond(200, {
+        success: true,
+        ruleName,
+        rule: {
+          Name: ruleInfo.Name,
+          Description: ruleInfo.Description,
+          State: ruleInfo.State,
+          ScheduleExpression: ruleInfo.ScheduleExpression,
+          Arn: ruleInfo.Arn,
+        },
+      });
+    } catch (err: any) {
+      // Rule not found
+      if (err.name === 'ResourceNotFoundException') {
+        return respond(404, {
+          success: false,
+          message: 'EventBridge rule not found',
+          ruleName,
+          error: `No rule named "${ruleName}" exists`,
+        });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('getExpirationRuleStatus error:', error);
     return serverError();
   }
 };

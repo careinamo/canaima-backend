@@ -198,6 +198,23 @@ functions:
           path: /orgs/{orgId}/credit-notes/{id}
           method: DELETE
 
+  # ===== DEBUG/TEST Endpoints for Credit Note Expiration =====
+  checkExpirationManual:
+    handler: src/functions/credit-notes/handler.checkExpirationManual
+    timeout: 10
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/credit-notes/{id}/manual-check-expiration
+          method: POST
+
+  getExpirationRuleStatus:
+    handler: src/functions/credit-notes/handler.getExpirationRuleStatus
+    timeout: 10
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/credit-notes/{id}/expiration-rule-status
+          method: GET
+
   # ===== Credit Notes Expiration Handler =====
   processCreditNoteExpiration:
     handler: src/functions/credit-notes/expiration/handler.processCreditNoteExpiration
