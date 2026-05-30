@@ -22,9 +22,11 @@ src/
 │   │   └── types.ts        # TypeScript interfaces
 │   ├── credit-notes/       # Credit Notes module
 │   │   ├── handler.ts      # Route handlers (5 endpoints)
-│   │   ├── repository.ts   # DynamoDB operations
+│   │   ├── repository.ts   # DynamoDB operations (with async metrics events)
 │   │   ├── validators.ts   # Input validation
-│   │   └── types.ts        # TypeScript interfaces
+│   │   ├── types.ts        # TypeScript interfaces
+│   │   └── expiration/     # Credit notes expiration handler
+│   │       └── handler.ts  # EventBridge scheduled handler
 │   ├── payments/           # Payments module
 │   │   ├── handler.ts      # Route handlers (5 endpoints)
 │   │   ├── repository.ts   # DynamoDB operations
@@ -32,15 +34,37 @@ src/
 │   │   └── types.ts        # TypeScript interfaces
 │   ├── credit-usage/       # Credit Usage metrics module
 │   │   ├── handler.ts      # Scheduled and event-driven handlers
-│   │   ├── repository.ts   # Metrics calculations and storage
+│   │   ├── repository.ts   # Credit usage calculations and storage
+│   │   ├── metrics-handler.ts   # Unified SQS consumer for all metrics
+│   │   ├── sqs-handler.ts  # Legacy: will be replaced by metrics-handler
 │   │   ├── types.ts        # TypeScript interfaces for metrics
 │   │   └── validators.ts   # Input validation
+│   ├── organizations/      # Organizations module
+│   │   ├── handler.ts      # Route handlers
+│   │   ├── repository.ts   # DynamoDB operations
+│   │   ├── types.ts        # TypeScript interfaces
+│   │   └── validators.ts   # Input validation
+│   ├── users/              # Users module
+│   │   ├── handler.ts      # Route handlers
+│   │   ├── repository.ts   # DynamoDB operations
+│   │   ├── types.ts        # TypeScript interfaces
+│   │   └── validators.ts   # Input validation
+│   ├── webhooks/           # Webhook handlers
+│   │   └── clerk/          # Clerk webhook processor
+│   │       ├── handler.ts
+│   │       ├── verify.ts
+│   │       └── webhook-events.ts
 │   └── shared/
-│       └── credit-usage-trigger.ts  # Utility to trigger credit usage calculation
+│       ├── metrics-trigger.ts     # Shared utility: publish events to EventBridge
+│       ├── credit-usage-trigger.ts # Legacy: now uses metrics-trigger
+│       ├── timezone-utils.ts      # Timezone conversion helpers
+│       └── errors.ts              # Shared error definitions
 └── seeds/
     ├── clients.ts          # Database seed data for clients
     ├── credit-notes.ts     # Database seed data for credit notes
-    └── payments.ts         # Database seed data for payments
+    ├── payments.ts         # Database seed data for payments
+    ├── users.ts            # Database seed data for users
+    └── organizations.ts    # Database seed data for organizations
 ```
 
 ## Configuration
@@ -1722,51 +1746,54 @@ npm run deploy:prod -- --region us-east-2
 
 ### Overview
 
-The Canaima backend uses an **event-driven architecture** for credit usage calculations, decoupling CRUD operations from resource-intensive metrics computation.
+The Canaima backend uses a **unified event-driven architecture** for all metrics calculations (credit usage and credit notes metrics), decoupling CRUD operations from resource-intensive computations.
 
 ### How It Works
 
 1. **Trigger**: When a credit note or payment is created, updated, or deleted, the Lambda function emits an event to AWS EventBridge with:
-   - `Source`: `canaima.creditusage`
-   - `DetailType`: `CreditUsageCalculationRequested`
-   - `Detail`: Contains `orgId` (which organization needs metrics recalculation) and `timestamp`
+   - `Source`: `canaima.metrics` (unified source for all metrics events)
+   - `DetailType`: Either `CreditUsageCalculationRequested` or `CreditNoteMetricsUpdateRequested`
+   - `Detail`: Contains `type` (event type), `orgId`, and `timestamp`
 
-2. **EventBridge Rule**: An EventBridge rule matches events with `source='canaima.creditusage'` and routes them to an AWS SQS queue (`CreditUsageQueue`) for durable, ordered processing.
+2. **EventBridge Rule**: A unified EventBridge rule matches events with `source='canaima.metrics'` and routes them to an AWS SQS queue (`MetricsQueue`) for durable, ordered processing.
 
-3. **SQS Queue**: Messages are batched and processed efficiently:
+3. **SQS Queue** (`MetricsQueue`): Messages are batched and processed efficiently:
    - **Batch Size**: Up to 10 messages per batch
    - **Batch Window**: 5 seconds max wait before processing even if fewer than 10 messages
    - **Visibility Timeout**: 300 seconds (5 minutes) to allow Lambda time to process
    - **Message Retention**: 14 days for reliability
+   - Handles both `CreditUsageCalculationRequested` and `CreditNoteMetricsUpdateRequested` events
 
-4. **Lambda Consumer** (`calculateCreditUsageSQS`): A dedicated Lambda function:
+4. **Lambda Consumer** (`calculateMetrics`): A unified Lambda function:
    - Polls the SQS queue for messages
-   - Extracts the `orgId` from each message
-   - Calls the credit usage calculation function: `calculateCreditUsage(orgId)`
-   - Stores the result in the metrics table: `saveCreditUsageRecord(orgId, usage)`
+   - Extracts `type` and `orgId` from each message
+   - Routes to appropriate handler:
+     - **CreditUsageCalculationRequested**: Calls `calculateCreditUsage(orgId)` and stores in metrics table
+     - **CreditNoteMetricsUpdateRequested**: Calls `updateMonthlyCreditNotesMetrics(orgId)` to calculate monthly totals
    - Returns failed message IDs for automatic retry via SQS
 
-5. **Dead Letter Queue** (`CreditUsageDLQ`): If a message fails processing 3 times, it's automatically sent to the DLQ for manual inspection and debugging.
+5. **Dead Letter Queue** (`MetricsDLQ`): If a message fails processing 3 times, it's automatically sent to the DLQ for manual inspection and debugging.
 
-### Benefits of Event-Driven Architecture
+### Event Type Details
+
+#### CreditUsageCalculationRequested
+**Triggered by**: Credit notes or payments (create, update, delete)
+**Calculation**: Percentage-based metric = `(Total Accumulated Debt / Total Credit Limit) × 100`
+**Storage**: Stored in metrics table as single hourly/daily record per org
+
+#### CreditNoteMetricsUpdateRequested
+**Triggered by**: Credit notes CRUD operations
+**Calculation**: Sum of all credit note amounts for the month
+**Storage**: Stored in metrics table as `PK=CreditNotesTotalMonth#orgId, SK=YYYY-MM`
+
+### Benefits of Unified Event-Driven Architecture
 
 - **Decoupling**: CRUD operations don't wait for metrics recalculation
-- **Scalability**: Lambda auto-scales to process messages efficiently
+- **Scalability**: Single Lambda auto-scales to process both metric types efficiently
+- **Clarity**: Events are clearly typed (detail.type) making routing explicit
 - **Reliability**: SQS ensures no events are lost with built-in retries and DLQ
-- **Cost-Effective**: Pay only for actual Lambda execution, not for idle connections
-
-### Credit Usage Calculation Logic
-
-The calculation computes a percentage-based metric:
-
-**Formula:** `creditUsage = (Total Accumulated Debt / Total Credit Limit) × 100`
-
-- Queries all active clients in an organization from the clients table
-- Sums their `accumulatedDebt` and `creditLimit` values
-- Calculates the ratio as a percentage
-- Stores the result in the metrics table with a timestamp and organization ID
-
-This metric helps understand portfolio risk: a high credit usage percentage indicates clients are collectively using most of their available credit.
+- **Flexibility**: Easy to add new metrics types in the future
+- **Cost-Effective**: Single Lambda consumer, shared infrastructure, pay only for actual execution
 
 ---
 
