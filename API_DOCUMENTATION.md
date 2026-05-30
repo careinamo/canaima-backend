@@ -659,11 +659,16 @@ The Credit Notes module provides REST API endpoints for managing B2B credit note
 
 **Credit Limit Integration:** Creating a credit note increases the client's `accumulatedDebt`. The system prevents credit note creation if it would cause `accumulatedDebt` to exceed the client's `creditLimit`.
 
-**Event-Driven Architecture:** All credit note CRUD operations (create, update, delete) trigger asynchronous credit usage calculation events. These events are published to AWS EventBridge and routed to an SQS queue, where a dedicated Lambda consumer processes them to recalculate credit usage metrics. This asynchronous, decoupled architecture ensures CRUD operations remain fast while expensive calculations run independently.
+**Event-Driven Architecture:** All credit note CRUD operations (create, update, delete) trigger two asynchronous event chains:
 
-**Lambda Timeout:** All credit note CRUD Lambda functions (`listCreditNotes`, `getCreditNote`, `createCreditNote`, `updateCreditNote`, `deleteCreditNote`) have a timeout of **29 seconds** to ensure sufficient time for processing before the API Gateway hard timeout of 30 seconds.
+1. **Credit Usage Metrics Event** (`CreditNoteMetricsUpdateRequested`): Published to EventBridge → SQS → Lambda to recalculate monthly credit notes totals and credit usage percentage
+   
+2. **Client Delinquency Validation Event** (`CreditNoteDeletedEvent` - on deletion only): Published to EventBridge → SQS → Lambda to check if the affected client still has any unpaid, expired credit notes
+   - If **no** unpaid expired notes exist → client's `delinquent` flag is **cleared** (set to `false`)
+   - If **any** unpaid expired notes exist → client's `delinquent` flag remains set to `true`
+   - **Note**: This automatic clearing ensures clients are only marked as delinquent if they genuinely owe money on overdue credit notes
 
-**Event-Driven Architecture:** All credit note CRUD operations (create, update, delete) trigger asynchronous credit usage calculation events. These events are published to AWS EventBridge and routed to an SQS queue, where a dedicated Lambda consumer processes them to recalculate credit usage metrics. This asynchronous, decoupled architecture ensures CRUD operations remain fast while expensive calculations run independently.
+This asynchronous, decoupled architecture ensures CRUD operations remain fast while expensive calculations and validations run independently.
 
 **Lambda Timeout:** All credit note CRUD Lambda functions (`listCreditNotes`, `getCreditNote`, `createCreditNote`, `updateCreditNote`, `deleteCreditNote`) have a timeout of **29 seconds** to ensure sufficient time for processing before the API Gateway hard timeout of 30 seconds.
 
@@ -1057,6 +1062,97 @@ curl -X DELETE http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b
 **Error Responses:**
 
 - **404 Not Found**: Credit note with the given ID does not exist
+
+---
+
+## Credit Note Expiration & Client Delinquency Management
+
+### Overview
+
+The system implements automated expiration handling and client delinquency status management for credit notes. When a credit note reaches its due date, it's marked as "overdue" if not fully paid. When a credit note is deleted, the system automatically validates whether the associated client should remain marked as delinquent.
+
+### Expiration Flow
+
+#### 1. Credit Note Status Transition (EventBridge-Scheduled)
+
+**Trigger:** Daily at 00:00 UTC via EventBridge rule `cn-expiration-rule`
+
+**Process:**
+- For each organization, query all credit notes with `dueDate` ≤ current date
+- For unpaid or partially paid credit notes:
+  - Set `status = 'overdue'`
+  - Mark the associated client as `delinquent = true`
+- For fully paid credit notes:
+  - Keep `status = 'paid'` (no change)
+
+**Lambda:** `processCreditNoteExpiration` (in `src/functions/credit-notes/expiration/handler.ts`)
+
+**Event Structure:**
+```json
+{
+  "detail": {
+    "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+    "orgId": "org-default",
+    "clientId": "550e8400-e29b-41d4-a716-446655440001"
+  }
+}
+```
+
+### Client Delinquency Validation Flow
+
+#### 2. Automatic Delinquency Status Update (On Credit Note Deletion)
+
+**Trigger:** When a credit note is deleted via DELETE `/orgs/{orgId}/credit-notes/{id}`
+
+**Process:**
+1. Client Deletion Handler publishes `CreditNoteDeletedEvent` to EventBridge
+   - Source: `canaima.credit-notes`
+   - DetailType: `CreditNoteDeletedEvent`
+   - Includes: `clientId`, `orgId`, `creditNoteId`
+
+2. Event routes via EventBridge Rule `CreditNoteDeletedRule` → SQS Queue `ClientDelinquencyCheckQueue`
+
+3. Lambda `checkClientDelinquency` (in `src/functions/credit-notes/client-delinquency-check.ts`):
+   - Queries all credit notes for the affected client
+   - Checks each note: Is `dueDate` past? Is `paid < amount`?
+   - **Result:**
+     - **If ANY unpaid expired notes exist** → Keep `client.delinquent = true`
+     - **If NO unpaid expired notes exist** → Update `client.delinquent = false`
+
+**Benefits:**
+- Clients are only marked as delinquent when they genuinely owe on overdue credit notes
+- When problematic credit notes are deleted/resolved, client status automatically clears
+- No manual intervention needed to fix delinquency status
+
+### SQS Configuration
+
+**Queue:** `ClientDelinquencyCheckQueue`
+- **Batch Size:** 10 messages
+- **Batch Window:** 5 seconds
+- **Visibility Timeout:** 300 seconds (5 minutes)
+- **Message Retention:** 14 days
+- **Dead Letter Queue:** `ClientDelinquencyCheckDLQ` (after 3 failures)
+
+### Example Scenario
+
+**Initial State:**
+- Client `ACME Corp` has:
+  - `dueDate: 2025-05-01` (past due)
+  - `paid: 500`, `amount: 1000` (not fully paid)
+  - `delinquent: true`
+
+**Action:** Delete the credit note
+
+**Automatic Validation:**
+1. Delete triggers `CreditNoteDeletedEvent`
+2. Event → EventBridge → SQS → Lambda (checkClientDelinquency)
+3. Lambda queries: "Does ACME Corp have any other unpaid expired notes?"
+4. Query Result: **No other unpaid expired notes**
+5. Lambda updates: `client.delinquent = false` ✅
+
+**Final State:**
+- Client `ACME Corp` is no longer marked as delinquent
+- The `delinquent` flag is automatically cleared by the system
 
 ---
 
