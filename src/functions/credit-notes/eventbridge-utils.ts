@@ -7,12 +7,14 @@ import {
 } from '@aws-sdk/client-eventbridge';
 import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
 import { createHash } from 'crypto';
 import { toDate, toZonedTime } from 'date-fns-tz';
 
 const eventBridgeClient = new EventBridgeClient({});
 const lambdaClient = new LambdaClient({});
 const stsClient = new STSClient({});
+const iamClient = new IAMClient({});
 
 // Get these from CloudFormation stack name or environment
 const STACK_NAME = process.env.AWS_LAMBDA_FUNCTION_NAME?.split('-').slice(0, -1).join('-') || 'canaima-backend';
@@ -131,15 +133,37 @@ export async function createCreditNoteExpirationRule(
       throw new Error('Could not get Lambda function ARN');
     }
 
+    console.log(`Lambda function ARN: ${lambdaArn}`);
+
     // Get account ID for role ARN
     const callerIdentity = await stsClient.send(new GetCallerIdentityCommand({}));
     const accountId = callerIdentity.Account;
 
-    // Construct the EventBridge role ARN dynamically
-    // For serverless-offline and deployed environments
-    const eventBridgeRoleArn = `arn:aws:iam::${accountId}:role/${STACK_NAME}-EventBridgeInvokeLambdaRole`;
+    // Try to get the EventBridge role from IAM
+    // This is more robust than constructing the ARN manually
+    const roleName = `${STACK_NAME}-EventBridgeInvokeLambdaRole`;
+    
+    let eventBridgeRoleArn: string;
+    try {
+      const roleInfo = await iamClient.send(
+        new GetRoleCommand({
+          RoleName: roleName,
+        }),
+      );
+      eventBridgeRoleArn = roleInfo.Role?.Arn || '';
+      console.log(`Retrieved EventBridge role ARN from IAM: ${eventBridgeRoleArn}`);
+    } catch (error) {
+      // If role doesn't exist with that name, construct it manually
+      console.warn(`Could not retrieve role ${roleName} from IAM, constructing ARN manually:`, error);
+      eventBridgeRoleArn = `arn:aws:iam::${accountId}:role/${roleName}`;
+      console.log(`Constructed EventBridge role ARN: ${eventBridgeRoleArn}`);
+    }
 
     // Add Lambda as target to the rule
+    console.log(`Adding Lambda target to rule ${ruleName}...`);
+    console.log(`  - Lambda ARN: ${lambdaArn}`);
+    console.log(`  - Role ARN: ${eventBridgeRoleArn}`);
+    console.log(`  - Input: creditNoteId=${creditNoteId}, orgId=${orgId}, clientId=${clientId}`);
     await eventBridgeClient.send(
       new PutTargetsCommand({
         Rule: ruleName,
@@ -159,11 +183,15 @@ export async function createCreditNoteExpirationRule(
       }),
     );
 
-    console.log(`Added Lambda target to rule: ${ruleName}`);
+    console.log(`✅ Successfully added Lambda target to rule: ${ruleName}`);
 
     return ruleName;
   } catch (error) {
-    console.error(`Error creating EventBridge rule ${ruleName}:`, error);
+    console.error(`❌ Error creating EventBridge rule ${ruleName}:`, {
+      errorType: (error as any)?.name || 'Unknown',
+      errorMessage: (error as Error)?.message || String(error),
+      stack: (error as Error)?.stack,
+    });
     throw error;
   }
 }
