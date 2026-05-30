@@ -90,6 +90,13 @@ provider:
             - iam:PassRole
           Resource:
             - !GetAtt EventBridgeInvokeLambdaRole.Arn
+            - !Sub "arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-EventBridgeInvokeLambdaRole"
+        - Effect: Allow
+          Action:
+            - iam:GetRole
+          Resource:
+            - !GetAtt EventBridgeInvokeLambdaRole.Arn
+            - !Sub "arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-EventBridgeInvokeLambdaRole"
 
 plugins:
   - serverless-offline
