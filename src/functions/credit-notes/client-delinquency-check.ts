@@ -6,6 +6,7 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
+import { updateDelinquentClientsMetrics } from '../shared/delinquent-metrics-trigger';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -135,6 +136,11 @@ export const checkClientDelinquency = async (event: SQSEvent): Promise<SQSBatchR
         );
         delinquencyAction = 'maintained';
       }
+
+      // Update delinquent clients metrics for the organization
+      updateDelinquentClientsMetrics(orgId).catch(err =>
+        console.warn('Failed to update delinquent clients metrics:', err),
+      );
 
       results.push({
         messageId: record.messageId,
