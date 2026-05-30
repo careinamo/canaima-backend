@@ -164,6 +164,7 @@ export async function createCreditNoteExpirationRule(
     console.log(`  - Lambda ARN: ${lambdaArn}`);
     console.log(`  - Role ARN: ${eventBridgeRoleArn}`);
     console.log(`  - Input: creditNoteId=${creditNoteId}, orgId=${orgId}, clientId=${clientId}`);
+    
     await eventBridgeClient.send(
       new PutTargetsCommand({
         Rule: ruleName,
@@ -172,11 +173,16 @@ export async function createCreditNoteExpirationRule(
             Id: '1',
             Arn: lambdaArn,
             RoleArn: eventBridgeRoleArn,
-            // Pass credit note details to the Lambda
+            // EventBridge wraps Input in event structure for Lambda
+            // Lambda receives this as the complete event
             Input: JSON.stringify({
-              creditNoteId,
-              orgId,
-              clientId,
+              detail: {
+                creditNoteId,
+                orgId,
+                clientId,
+              },
+              source: 'canaima.credit-notes-expiration',
+              'detail-type': 'CreditNoteExpirationEvent',
             }),
           },
         ],
