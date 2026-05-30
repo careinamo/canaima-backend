@@ -229,7 +229,7 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     reference: input.reference,
     description: input.description,
     clientAccumulatedDebtAtRecord: clientAccumulatedDebtAfterPayment,
-    clientCreditLimitAtRecord: client.creditLimit,
+    clientCreditLimitAtRecord: client.creditLimit - clientAccumulatedDebtAfterPayment,
     createdAt: now,
     updatedAt: now,
   };
@@ -321,7 +321,7 @@ export async function updatePayment(orgId: string, paymentId: string, input: Upd
   const values: Record<string, unknown> = { 
     ':updatedAt': getCurrentTimestampInTimezone(),
     ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
-    ':clientCreditLimitAtRecord': client.creditLimit,
+    ':clientCreditLimitAtRecord': client.creditLimit - client.accumulatedDebt,
   };
   const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord': 'clientCreditLimitAtRecord' };
 

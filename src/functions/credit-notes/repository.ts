@@ -244,7 +244,7 @@ export async function createCreditNote(orgId: string, input: CreateCreditNoteInp
     dueDate: input.dueDate,
     description: input.description,
     clientAccumulatedDebtAtRecord: newDebt,
-    clientCreditLimitAtRecord: client.creditLimit,
+    clientCreditLimitAtRecord: client.creditLimit - newDebt,
     createdAt: now,
     updatedAt: now,
   };
@@ -318,7 +318,7 @@ export async function updateCreditNote(
   const values: Record<string, unknown> = { 
     ':updatedAt': getCurrentTimestampInTimezone(),
     ':clientAccumulatedDebtAtRecord': client.accumulatedDebt,
-    ':clientCreditLimitAtRecord': client.creditLimit,
+    ':clientCreditLimitAtRecord': client.creditLimit - client.accumulatedDebt,
   };
   const names: Record<string, string> = { '#updatedAt': 'updatedAt', '#clientAccumulatedDebtAtRecord': 'clientAccumulatedDebtAtRecord', '#clientCreditLimitAtRecord': 'clientCreditLimitAtRecord' };
 
