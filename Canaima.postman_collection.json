@@ -418,6 +418,33 @@
             "description": "Delete a credit note"
           },
           "response": []
+        },
+        {
+          "name": "Get Expiration Rule Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/credit-notes/{{creditNoteId}}/expiration-rule-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "credit-notes",
+                "{{creditNoteId}}",
+                "expiration-rule-status"
+              ]
+            },
+            "description": "Debug endpoint to check if EventBridge rule exists and its status for a credit note. Returns the rule details (name, state, schedule, ARN) or 404 if the rule doesn't exist."
+          },
+          "response": []
         }
       ]
     },

@@ -666,6 +666,7 @@ resources:
     EventBridgeInvokeLambdaRole:
       Type: AWS::IAM::Role
       Properties:
+        RoleName: !Sub "${AWS::StackName}-EventBridgeInvokeLambdaRole"
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
