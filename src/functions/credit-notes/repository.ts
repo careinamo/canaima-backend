@@ -1,5 +1,6 @@
 import { getCurrentTimestampInTimezone } from '../shared/timezone-utils';
 import { publishMetricsEvent } from '../shared/metrics-trigger';
+import { publishCreditNoteEvent } from '../shared/credit-notes-trigger';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -469,6 +470,13 @@ export async function deleteCreditNote(orgId: string, noteId: string): Promise<b
     publishMetricsEvent('CreditNoteMetricsUpdateRequested', orgId).catch(err =>
       console.warn('Failed to publish credit note metrics event:', err),
     );
+
+    // Publish client delinquency check event if a client was affected
+    if (clientId) {
+      publishCreditNoteEvent('CreditNoteDeletedEvent', orgId, clientId, noteId).catch(err =>
+        console.warn('Failed to publish client delinquency check event:', err),
+      );
+    }
 
     return true;
   } catch (e) {

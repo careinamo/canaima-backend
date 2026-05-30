@@ -84,6 +84,7 @@ provider:
             - sqs:GetQueueAttributes
           Resource:
             - !GetAtt MetricsQueue.Arn
+            - !GetAtt ClientDelinquencyCheckQueue.Arn
         - Effect: Allow
           Action:
             - iam:PassRole
@@ -323,6 +324,15 @@ functions:
       - httpApi:
           path: /webhooks/clerk
           method: POST
+
+  # ===== Client Delinquency Check =====
+  checkClientDelinquency:
+    handler: src/functions/credit-notes/client-delinquency-check.checkClientDelinquency
+    events:
+      - sqs:
+          arn: !GetAtt ClientDelinquencyCheckQueue.Arn
+          batchSize: 10
+          maximumBatchingWindowInSeconds: 5
 
 resources:
   Resources:
@@ -571,6 +581,62 @@ resources:
           - Arn: !GetAtt MetricsQueue.Arn
             RoleArn: !GetAtt EventBridgeToMetricsQueueRole.Arn
             Id: MetricsQueueTarget
+
+    # ===== SQS Queue for Client Delinquency Checks =====
+    ClientDelinquencyCheckQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-client-delinquency-check-queue
+        VisibilityTimeout: 300 # 5 minutes for Lambda timeout
+        MessageRetentionPeriod: 1209600 # 14 days
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ClientDelinquencyCheckDLQ.Arn
+          maxReceiveCount: 3
+
+    ClientDelinquencyCheckDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-client-delinquency-check-dlq
+        MessageRetentionPeriod: 1209600 # 14 days
+
+    # ===== EventBridge IAM Role for sending to Client Delinquency Check Queue =====
+    EventBridgeToClientDelinquencyQueueRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: SendToClientDelinquencyCheckQueue
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                  Resource: !GetAtt ClientDelinquencyCheckQueue.Arn
+
+    # ===== EventBridge Rule: Route credit note deleted events to client delinquency check =====
+    CreditNoteDeletedRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventBusName: default
+        Name: ${self:service}-${self:provider.stage}-credit-note-deleted-rule
+        Description: Route credit note deleted events to client delinquency check
+        EventPattern:
+          source:
+            - canaima.credit-notes
+          detail-type:
+            - CreditNoteDeletedEvent
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt ClientDelinquencyCheckQueue.Arn
+            RoleArn: !GetAtt EventBridgeToClientDelinquencyQueueRole.Arn
+            Id: ClientDelinquencyCheckQueueTarget
 
     # ===== EventBridge IAM Role for Lambda invocation =====
     EventBridgeInvokeLambdaRole:

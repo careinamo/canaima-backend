@@ -1,4 +1,3 @@
-import { EventBridgeEvent } from 'aws-lambda';
 import * as repo from './repository';
 
 console.log('Credit Note Expiration Handler initialized');
