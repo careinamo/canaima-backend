@@ -660,9 +660,9 @@ resources:
         Description: Route credit note deleted events to client delinquency check
         EventPattern:
           source:
-            - canaima.credit-notes
+            - canaima.crud
           detail-type:
-            - CreditNoteDeletedEvent
+            - CreditNoteDeleted
         State: ENABLED
         Targets:
           - Arn: !GetAtt ClientDelinquencyCheckQueue.Arn

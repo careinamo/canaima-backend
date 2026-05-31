@@ -21,6 +21,7 @@ const METRICS_TABLE = process.env.TABLE_METRICS as string;
  */
 export async function updateDelinquentClientsMetrics(orgId: string, date: Date = new Date()): Promise<void> {
   try {
+    console.log(`Tumadre Updating delinquent clients metrics for org ${orgId} on date ${date.toISOString()}`);
     // Format date as YYYY-MM-DD for the SK
     const dateString = date.toISOString().split('T')[0]; // e.g., "2026-05-30"
 

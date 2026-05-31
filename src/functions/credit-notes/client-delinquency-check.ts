@@ -46,12 +46,35 @@ export const checkClientDelinquency = async (event: SQSEvent): Promise<SQSBatchR
       // Parse the body (EventBridge sends the event as a string)
       const message = JSON.parse(record.body);
       const orgId = message.detail?.orgId || message.orgId;
-      const clientId = message.detail?.clientId || message.clientId;
+      const entityId = message.detail?.entityId || message.entityId; // For CRUD events
       const eventType = message.detail?.type || message.type;
 
-      if (!orgId || !clientId) {
-        console.error('Missing orgId or clientId in message:', record.body);
-        throw new Error('Missing orgId or clientId in message');
+      if (!orgId) {
+        console.error('Missing orgId in message:', record.body);
+        throw new Error('Missing orgId in message');
+      }
+
+      console.log(
+        `Processing delinquency check for org ${orgId} (event: ${eventType}, entityId: ${entityId})`,
+      );
+
+      // For CreditNoteDeleted events, we need to get the clientId from the event data
+      let clientId = message.detail?.clientId || message.clientId;
+      
+      if (!clientId && message.detail?.data?.clientId) {
+        clientId = message.detail.data.clientId;
+      }
+
+      // If we still don't have clientId, we can't proceed with specific client check
+      if (!clientId) {
+        console.warn(`No clientId found for event ${eventType}. Skipping specific client delinquency check.`);
+        results.push({
+          messageId: record.messageId,
+          orgId,
+          status: 'success',
+          reason: 'skipped_no_clientId',
+        });
+        continue;
       }
 
       console.log(

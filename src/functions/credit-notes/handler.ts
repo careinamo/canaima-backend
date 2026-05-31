@@ -239,6 +239,12 @@ export const deleteCreditNote = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing credit note id');
 
+    // Get the credit note first to capture clientId for the event
+    const creditNote = await repo.getCreditNoteById(orgId, id);
+    if (!creditNote) return clientError(404, 'Credit note not found');
+
+    const clientId = (creditNote as any).clientId;
+
     // Delete EventBridge rule for credit note expiration
     try {
       await deleteCreditNoteExpirationRule(orgId, id);
@@ -252,8 +258,8 @@ export const deleteCreditNote = async (
     const deleted = await repo.deleteCreditNote(orgId, id);
     if (!deleted) return clientError(404, 'Credit note not found');
 
-    // Publish CreditNoteDeleted CRUD event
-    publishCrudEvent('CreditNoteDeleted', orgId, id).catch(err =>
+    // Publish CreditNoteDeleted CRUD event with clientId
+    publishCrudEvent('CreditNoteDeleted', orgId, id, { clientId, creditNoteData: creditNote }).catch(err =>
       console.warn('Failed to publish CreditNoteDeleted event:', err)
     );
 
