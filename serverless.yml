@@ -651,23 +651,24 @@ resources:
                     - sqs:SendMessage
                   Resource: !GetAtt ClientDelinquencyCheckQueue.Arn
 
-    # ===== EventBridge Rule: Route credit note deleted events to client delinquency check =====
-    CreditNoteDeletedRule:
+    # ===== EventBridge Rule: Route events to client status check (delinquency/solvency) =====
+    ClientStatusCheckRule:
       Type: AWS::Events::Rule
       Properties:
         EventBusName: default
-        Name: ${self:service}-${self:provider.stage}-credit-note-deleted-rule
-        Description: Route credit note deleted events to client delinquency check
+        Name: ${self:service}-${self:provider.stage}-client-status-check-rule
+        Description: Route events that require checking if client is delinquent or solvent
         EventPattern:
           source:
             - canaima.crud
           detail-type:
             - CreditNoteDeleted
+            - CreditNotePaid
         State: ENABLED
         Targets:
           - Arn: !GetAtt ClientDelinquencyCheckQueue.Arn
             RoleArn: !GetAtt EventBridgeToClientDelinquencyQueueRole.Arn
-            Id: ClientDelinquencyCheckQueueTarget
+            Id: ClientStatusCheckQueueTarget
 
     # ===== EventBridge IAM Role for Lambda invocation =====
     EventBridgeInvokeLambdaRole:

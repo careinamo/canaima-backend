@@ -258,8 +258,8 @@ export const deleteCreditNote = async (
     const deleted = await repo.deleteCreditNote(orgId, id);
     if (!deleted) return clientError(404, 'Credit note not found');
 
-    // Publish CreditNoteDeleted CRUD event with clientId
-    publishCrudEvent('CreditNoteDeleted', orgId, id, { clientId, creditNoteData: creditNote }).catch(err =>
+    // Publish CreditNoteDeleted CRUD event with clientId (await to ensure it's sent before response)
+    await publishCrudEvent('CreditNoteDeleted', orgId, id, { clientId, creditNoteData: creditNote }).catch(err =>
       console.warn('Failed to publish CreditNoteDeleted event:', err)
     );
 

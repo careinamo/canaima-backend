@@ -6,12 +6,16 @@
 
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 
-const eventBridge = new EventBridgeClient({});
+// Create client inside function to avoid signature expiration on frozen Lambdas
+function getEventBridgeClient() {
+  return new EventBridgeClient({});
+}
 
 export type CrudEventType = 
   | 'CreditNoteCreated'
   | 'CreditNoteUpdated'
   | 'CreditNoteDeleted'
+  | 'CreditNotePaid'
   | 'PaymentCreated'
   | 'PaymentUpdated'
   | 'PaymentDeleted';
@@ -47,6 +51,7 @@ export async function publishCrudEvent(
       ],
     };
 
+    const eventBridge = getEventBridgeClient();
     const response = await eventBridge.send(new PutEventsCommand(params));
 
     if (response.FailedEntryCount && response.FailedEntryCount > 0) {

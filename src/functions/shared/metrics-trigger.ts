@@ -5,7 +5,10 @@
 
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 
-const eventBridge = new EventBridgeClient({});
+// Create client inside function to avoid signature expiration on frozen Lambdas
+function getEventBridgeClient() {
+  return new EventBridgeClient({});
+}
 
 export async function publishMetricsEvent(
   eventType: 'CreditUsageCalculationRequested' | 'CreditNoteMetricsUpdateRequested',
@@ -29,6 +32,7 @@ export async function publishMetricsEvent(
   };
 
   try {
+    const eventBridge = getEventBridgeClient();
     const response = await eventBridge.send(new PutEventsCommand(params));
 
     if (response.FailedEntryCount && response.FailedEntryCount > 0) {

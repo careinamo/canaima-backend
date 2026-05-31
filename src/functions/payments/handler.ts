@@ -1,6 +1,7 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { ValidationError, validateCreatePayment, validateUpdatePayment } from './validators';
 import * as repo from './repository';
+import * as creditNotesRepo from '../credit-notes/repository';
 import type { PaymentMethod, PaymentStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 import { publishCrudEvent } from '../shared/crud-trigger';
@@ -135,6 +136,22 @@ export const createPayment = async (
     publishCrudEvent('PaymentCreated', orgId, payment.id, payment).catch(err =>
       console.warn('Failed to publish PaymentCreated event:', err)
     );
+
+    // Check if credit note is fully paid and publish event for delinquency check
+    if (input.creditNoteId) {
+      creditNotesRepo.getCreditNoteById(orgId, input.creditNoteId).then(creditNote => {
+        if (creditNote && creditNote.status === 'paid') {
+          publishCrudEvent('CreditNotePaid', orgId, input.creditNoteId, {
+            clientId: input.clientId,
+            creditNoteId: input.creditNoteId,
+          }).catch(err =>
+            console.warn('Failed to publish CreditNotePaid event:', err)
+          );
+        }
+      }).catch(err =>
+        console.warn('Failed to check credit note status:', err)
+      );
+    }
     
     // Trigger credit usage calculation asynchronously
     triggerCreditUsageCalculation(orgId).catch(err => 
