@@ -3,10 +3,21 @@ service: canaima-backend
 frameworkVersion: "^4"
 useDotenv: true
 
+custom:
+  stages:
+    dev:
+      region: us-west-2
+      domainName: api-dev.canaimacredito.com
+      certificateArn: arn:aws:acm:us-west-2:503561456281:certificate/b409fc71-c521-4f9a-a9e2-341a5f8082e6
+    prod:
+      region: us-east-1
+      domainName: api.canaimacredito.com
+      certificateArn: arn:aws:acm:us-east-1:503561456281:certificate/373e4914-b16c-4fe8-8d02-0648fcd6625a
+
 provider:
   name: aws
   runtime: nodejs24.x
-  region: ${env:AWS_REGION, 'us-east-1'}
+  region: ${self:custom.stages.${self:provider.stage}.region}
   stage: ${opt:stage, 'dev'}
   httpApi:
     cors:
@@ -281,7 +292,6 @@ functions:
       - sqs:
           arn: !GetAtt MetricsQueue.Arn
           batchSize: 10
-          maximumBatchingWindowInSeconds: 5
 
   # ===== Organizations endpoints =====
   listUserOrganizations:
@@ -356,7 +366,6 @@ functions:
       - sqs:
           arn: !GetAtt ClientDelinquencyCheckQueue.Arn
           batchSize: 10
-          maximumBatchingWindowInSeconds: 5
 
 resources:
   Resources:
@@ -692,3 +701,27 @@ resources:
                     - lambda:InvokeFunction
                   Resource:
                     - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-processCreditNoteExpiration'
+
+    # ===== API Gateway Custom Domain =====
+    ApiGatewayCustomDomain:
+      Type: AWS::ApiGatewayV2::DomainName
+      Properties:
+        DomainName: ${self:custom.stages.${self:provider.stage}.domainName}
+        DomainNameConfigurations:
+          - CertificateArn: ${self:custom.stages.${self:provider.stage}.certificateArn}
+            EndpointType: REGIONAL
+            SecurityPolicy: TLS_1_2
+
+    # ===== API Gateway Domain Name Mapping =====
+    ApiGatewayDomainMapping:
+      Type: AWS::ApiGatewayV2::ApiMapping
+      DependsOn: ApiGatewayCustomDomain
+      Properties:
+        ApiId: !Ref HttpApi
+        DomainName: !Ref ApiGatewayCustomDomain
+        Stage: $default
+
+  Outputs:
+    ApiGatewayDomainName:
+      Description: API Gateway Custom Domain Target
+      Value: !GetAtt ApiGatewayCustomDomain.RegionalDomainName
