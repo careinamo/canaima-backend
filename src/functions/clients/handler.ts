@@ -114,8 +114,11 @@ export const createClient = async (
 
     const input = validateCreateClient(body);
 
-    const existing = await repo.findClientByEmail(input.email);
-    if (existing) return clientError(409, 'A client with this email already exists');
+    // Only check for duplicate email if email is provided
+    if (input.email) {
+      const existing = await repo.findClientByEmail(input.email);
+      if (existing) return clientError(409, 'A client with this email already exists');
+    }
 
     const client = await repo.createClient(orgId, input);
     return respond(201, client);
@@ -147,7 +150,8 @@ export const updateClient = async (
 
     const input = validateUpdateClient(body);
 
-    if (input.email) {
+    // Only check for duplicate email if email is provided and it's different
+    if (input.email !== undefined) {
       const existing = await repo.findClientByEmail(input.email);
       if (existing && existing.id !== id) {
         return clientError(409, 'A client with this email already exists');

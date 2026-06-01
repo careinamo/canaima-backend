@@ -30,6 +30,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 
 #### GET `/clients` - Listar clientes
 **Query:** `?page=1&limit=20&search=&active=true&delinquent=false&sortBy=createdAt&sortOrder=asc`
+> **search:** Busca en nombre y email (si el cliente tiene email registrado)
 ```json
 // Response 200
 {
@@ -47,7 +48,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### POST `/clients` - Crear cliente
 ```json
 // Request
-{ "name": "required", "email": "required", "phone": "", "address": "", "creditLimit": 0, "notes": "" }
+{ "name": "required", "email": "optional", "phone": "", "address": "", "creditLimit": 0, "notes": "" }
 // Response 201
 { "id": "", "name": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "createdAt": "", "updatedAt": "" }
 ```

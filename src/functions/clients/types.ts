@@ -2,7 +2,7 @@ export interface Client {
   id: string;
   orgId: string;
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   address?: string;
   active: boolean;
@@ -21,12 +21,12 @@ export interface ClientRecord extends Client {
   PK: string;   // org#<orgId>
   SK: string;    // client#<clientId>
   nameLower: string;
-  emailLower: string;
+  emailLower?: string;
 }
 
 export interface CreateClientInput {
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   address?: string;
   active: boolean;

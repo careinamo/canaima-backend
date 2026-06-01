@@ -323,7 +323,7 @@ Create a new client account within an organization.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | ✓ | Client name |
-| `email` | string | ✓ | Client email (must be unique) |
+| `email` | string | - | Client email (optional, must be unique if provided) |
 | `phone` | string | - | Phone number |
 | `address` | string | - | Physical address |
 | `active` | boolean | - | Whether the client is active (default: `true`) |
@@ -506,7 +506,7 @@ Import multiple clients at once from a CSV file. Maximum of 50 clients per reque
 **Request Body:**
 
 Plain text CSV content with the following format:
-- **Header row required** with column names: `name`, `email`, and optionally: `phone`, `address`, `active`, `delinquent`, `creditLimit`, `notes`
+- **Header row required** with column names: `name` is required, optionally: `email`, `phone`, `address`, `active`, `delinquent`, `creditLimit`, `notes`
 - One client per line
 - Columns separated by commas
 - Maximum 50 data rows (excluding header)
@@ -517,8 +517,10 @@ Plain text CSV content with the following format:
 name,email,phone,address,active,delinquent,creditLimit,notes
 Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
 Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,Referred by Acme
-Global Traders,sales@global.com,+1-555-0102,789 Pine Rd,false,false,30000,On hold
+Global Traders,,789 Pine Rd,false,false,30000,Sin email registrado
 ```
+
+> **Note:** Email es opcional. En el ejemplo anterior, "Global Traders" se importa sin email.
 
 **Example Request:**
 
@@ -632,10 +634,10 @@ When some rows fail validation but others succeed:
 
 **Validation Rules:**
 
-- `name` and `email` are required columns
-- `name` must not be empty
-- `email` must be in valid email format (XXX@XXX.XXX)
-- `email` must be unique across the organization (checked against existing clients and duplicates within the batch)
+- `name` is required (must not be empty)
+- `email` is optional, but if provided must:
+  - Be in valid email format (XXX@XXX.XXX)
+  - Be unique across the organization (checked against existing clients and duplicates within the batch)
 - `active` must be a boolean (defaults to `true` if omitted)
 - `delinquent` must be a boolean (defaults to `false` if omitted)
 - `creditLimit` must be a non-negative number (defaults to 0 if omitted)

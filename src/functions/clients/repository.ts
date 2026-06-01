@@ -144,7 +144,7 @@ export async function createClient(orgId: string, input: CreateClientInput): Pro
     name: input.name,
     nameLower: input.name.toLowerCase(),
     email: input.email,
-    emailLower: input.email.toLowerCase(),
+    emailLower: input.email ? input.email.toLowerCase() : undefined,
     phone: input.phone,
     address: input.address,
     active: input.active,
@@ -175,19 +175,29 @@ export async function createClientsBatch(
   // Check for duplicate emails across the batch and in DB
   const emailsInBatch = new Set<string>();
   for (const input of inputs) {
-    if (emailsInBatch.has(input.email)) {
-      errors.push({ email: input.email, error: 'Duplicate email in batch' });
-      continue;
-    }
-    emailsInBatch.add(input.email);
-
-    try {
-      // Check if email already exists in DB
-      const existing = await findClientByEmail(input.email);
-      if (existing) {
-        errors.push({ email: input.email, error: 'Email already exists' });
+    // Only validate email if provided
+    if (input.email) {
+      if (emailsInBatch.has(input.email)) {
+        errors.push({ email: input.email, error: 'Duplicate email in batch' });
         continue;
       }
+      emailsInBatch.add(input.email);
+
+      try {
+        // Check if email already exists in DB
+        const existing = await findClientByEmail(input.email);
+        if (existing) {
+          errors.push({ email: input.email, error: 'Email already exists' });
+          continue;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        errors.push({ email: input.email, error: message });
+        continue;
+      }
+    }
+
+    try {
 
       const clientId = randomUUID();
       const record: ClientRecord = {
@@ -198,7 +208,7 @@ export async function createClientsBatch(
         name: input.name,
         nameLower: input.name.toLowerCase(),
         email: input.email,
-        emailLower: input.email.toLowerCase(),
+        emailLower: input.email ? input.email.toLowerCase() : undefined,
         phone: input.phone,
         address: input.address,
         active: input.active,
@@ -214,7 +224,7 @@ export async function createClientsBatch(
       created.push(toClient(record as unknown as Record<string, unknown>));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      errors.push({ email: input.email, error: message });
+      errors.push({ email: input.email ?? 'unknown', error: message });
     }
   }
 
@@ -237,11 +247,18 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
     values[':nameLower'] = input.name.toLowerCase();
   }
   if (input.email !== undefined) {
-    sets.push('#email = :email', '#emailLower = :emailLower');
+    sets.push('#email = :email');
     names['#email'] = 'email';
-    names['#emailLower'] = 'emailLower';
-    values[':email'] = input.email;
-    values[':emailLower'] = input.email.toLowerCase();
+    if (input.email) {
+      sets.push('#emailLower = :emailLower');
+      names['#emailLower'] = 'emailLower';
+      values[':email'] = input.email;
+      values[':emailLower'] = input.email.toLowerCase();
+    } else {
+      removes.push('#emailLower');
+      names['#emailLower'] = 'emailLower';
+      values[':email'] = undefined;
+    }
   }
   if (input.active !== undefined) {
     sets.push('#active = :active');

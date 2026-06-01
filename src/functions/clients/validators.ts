@@ -18,11 +18,16 @@ export function validateCreateClient(body: unknown): CreateClientInput {
   if (!input.name || typeof input.name !== 'string' || !String(input.name).trim()) {
     throw new ValidationError('name is required');
   }
-  if (!input.email || typeof input.email !== 'string' || !String(input.email).trim()) {
-    throw new ValidationError('email is required');
-  }
-  if (!EMAIL_REGEX.test(String(input.email).trim())) {
-    throw new ValidationError('email format is invalid');
+  // Email is now optional
+  let email: string | undefined;
+  if (input.email) {
+    if (typeof input.email !== 'string' || !String(input.email).trim()) {
+      throw new ValidationError('email must be a non-empty string');
+    }
+    if (!EMAIL_REGEX.test(String(input.email).trim())) {
+      throw new ValidationError('email format is invalid');
+    }
+    email = String(input.email).toLowerCase().trim();
   }
 
   const active = typeof input.active === 'boolean' ? input.active : true;
@@ -35,7 +40,7 @@ export function validateCreateClient(body: unknown): CreateClientInput {
 
   return {
     name: String(input.name).trim(),
-    email: String(input.email).toLowerCase().trim(),
+    email,
     active,
     delinquent,
     creditLimit,
@@ -60,11 +65,15 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
   }
 
   if ('email' in input) {
-    const email = String(input.email ?? '').trim();
-    if (!email || !EMAIL_REGEX.test(email)) {
-      throw new ValidationError('email format is invalid');
+    if (input.email !== undefined && input.email !== null) {
+      const email = String(input.email).trim();
+      if (!email || !EMAIL_REGEX.test(email)) {
+        throw new ValidationError('email format is invalid');
+      }
+      result.email = email.toLowerCase();
+    } else {
+      result.email = undefined;
     }
-    result.email = email.toLowerCase();
   }
 
   if ('active' in input) {
@@ -107,7 +116,8 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
 /**
  * Parse and validate a CSV string with client data.
  * Expected format: CSV with header row
- * Columns: name, email, phone, address, active, delinquent, creditLimit, notes
+ * Required columns: name
+ * Optional columns: email, phone, address, active, delinquent, creditLimit, notes
  * Maximum 50 rows allowed.
  */
 export interface ParsedCsvRow {
@@ -130,12 +140,9 @@ export function parseCsvClients(csvContent: string): CsvParseResult {
   const headerLine = lines[0];
   const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
   
-  // Validate header
-  const requiredHeaders = ['name', 'email'];
-  for (const required of requiredHeaders) {
-    if (!headers.includes(required)) {
-      throw new ValidationError(`CSV must include '${required}' column`);
-    }
+  // Validate header - only 'name' is required
+  if (!headers.includes('name')) {
+    throw new ValidationError('CSV must include \'name\' column');
   }
 
   const valid: ParsedCsvRow[] = [];
