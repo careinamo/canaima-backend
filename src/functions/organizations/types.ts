@@ -11,6 +11,8 @@ export interface Organization {
   createdBy: string; // userId of creator
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
+  onboardingCompleted: boolean; // true when user completes onboarding form
+  onboardingCompletedAt?: string; // ISO 8601, when onboarding was completed
 }
 
 export interface OrganizationMember {

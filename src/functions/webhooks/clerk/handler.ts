@@ -141,9 +141,16 @@ async function handleUserDeleted(data: any) {
 
 async function handleOrganizationCreated(data: any) {
   console.log('Handling organization.created:', data.id);
-  // For now, just acknowledge. Full metadata comes from POST /organizations
-  // But we can store basic info from Clerk
-  // The user who created it should call POST /organizations to set metadata
+  
+  // Create organization in DynamoDB from Clerk webhook data
+  // This creates a basic org entry with onboardingCompleted=false
+  // The user will complete onboarding via PATCH /organizations/{orgId}
+  await orgsRepo.createOrgFromWebhook({
+    clerkOrgId: data.id,
+    name: data.name || 'Unnamed Organization',
+    slug: data.slug,
+    createdBy: data.created_by || 'unknown', // Clerk user ID who created the org
+  });
 }
 
 async function handleOrganizationUpdated(data: any) {

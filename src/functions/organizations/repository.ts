@@ -31,6 +31,7 @@ export async function upsertOrg(input: {
     createdBy: input.createdBy,
     createdAt: now,
     updatedAt: now,
+    onboardingCompleted: false,
   };
 
   await ddb.send(
@@ -40,6 +41,51 @@ export async function upsertOrg(input: {
     }),
   );
 
+  return org;
+}
+
+/**
+ * Create organization from Clerk webhook data
+ * This creates a basic org entry that will be completed during onboarding
+ */
+export async function createOrgFromWebhook(input: {
+  clerkOrgId: string;
+  name: string;
+  slug?: string;
+  createdBy: string;
+}): Promise<Organization> {
+  const now = getCurrentTimestampInTimezone();
+  const pk = `ORG#${input.clerkOrgId}`;
+
+  // Check if org already exists
+  const existing = await getOrg(input.clerkOrgId);
+  if (existing) {
+    console.log(`Organization ${input.clerkOrgId} already exists, skipping creation`);
+    return existing;
+  }
+
+  const org: Organization = {
+    PK: pk,
+    SK: 'META',
+    clerkOrgId: input.clerkOrgId,
+    name: input.name,
+    slug: input.slug || input.name.toLowerCase().replace(/\s+/g, '-'),
+    plan: 'free',
+    currency: 'USD',
+    createdBy: input.createdBy,
+    createdAt: now,
+    updatedAt: now,
+    onboardingCompleted: false,
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: org,
+    }),
+  );
+
+  console.log(`Created organization ${input.clerkOrgId} from webhook`);
   return org;
 }
 
@@ -116,6 +162,50 @@ export async function updateOrg(
     }),
   );
 
+  return result.Attributes as Organization;
+}
+
+/**
+ * Complete onboarding for an organization
+ * Updates name, teamSize, and marks onboarding as completed
+ */
+export async function completeOnboarding(
+  clerkOrgId: string,
+  data: {
+    name: string;
+    teamSize: number;
+  },
+): Promise<Organization> {
+  const now = getCurrentTimestampInTimezone();
+  const pk = `ORG#${clerkOrgId}`;
+
+  const result = await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE,
+      Key: {
+        PK: pk,
+        SK: 'META',
+      },
+      UpdateExpression: `SET #name = :name, teamSize = :teamSize, slug = :slug, 
+                         onboardingCompleted = :onboardingCompleted, 
+                         onboardingCompletedAt = :onboardingCompletedAt, 
+                         updatedAt = :updatedAt`,
+      ExpressionAttributeNames: {
+        '#name': 'name',
+      },
+      ExpressionAttributeValues: {
+        ':name': data.name,
+        ':teamSize': data.teamSize,
+        ':slug': data.name.toLowerCase().replace(/\s+/g, '-'),
+        ':onboardingCompleted': true,
+        ':onboardingCompletedAt': now,
+        ':updatedAt': now,
+      },
+      ReturnValues: 'ALL_NEW',
+    }),
+  );
+
+  console.log(`Onboarding completed for organization ${clerkOrgId}`);
   return result.Attributes as Organization;
 }
 

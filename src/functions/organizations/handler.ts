@@ -3,6 +3,7 @@ import { z } from 'zod';
 import * as repo from './repository';
 import { createOrganizationSchema, updateOrganizationSchema } from './validators';
 import { HttpError, toErrorResponse } from '../shared/errors';
+import { updateClerkOrganization, isClerkApiConfigured } from '../shared/clerk-api';
 
 class OrganizationError extends HttpError {}
 
@@ -156,6 +157,87 @@ export async function listOrganizationMembers(
       }),
     };
   } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+// Schema for onboarding completion
+const completeOnboardingSchema = z.object({
+  name: z.string().min(1, 'Organization name is required'),
+  teamSize: z.number().int().min(1, 'Team size must be at least 1'),
+});
+
+/**
+ * POST /organizations/{orgId}/complete-onboarding
+ * Complete organization onboarding: update name, teamSize, and sync to Clerk
+ */
+export async function completeOnboarding(
+  event: APIGatewayProxyEventV2,
+): Promise<APIGatewayProxyResultV2> {
+  try {
+    const clerkOrgId = event.pathParameters?.orgId;
+
+    if (!clerkOrgId) {
+      throw new OrganizationError(400, 'Missing orgId');
+    }
+
+    // Verify organization exists
+    const existingOrg = await repo.getOrg(clerkOrgId);
+    if (!existingOrg) {
+      throw new OrganizationError(404, 'Organization not found');
+    }
+
+    // Check if already completed
+    if (existingOrg.onboardingCompleted) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          data: existingOrg,
+          message: 'Onboarding already completed',
+        }),
+      };
+    }
+
+    const body = JSON.parse(event.body || '{}');
+    const validated = completeOnboardingSchema.parse(body);
+
+    // Update Clerk organization name
+    if (isClerkApiConfigured()) {
+      try {
+        await updateClerkOrganization(clerkOrgId, {
+          name: validated.name,
+          slug: validated.name.toLowerCase().replace(/\s+/g, '-'),
+        });
+        console.log(`Updated Clerk organization ${clerkOrgId} name to "${validated.name}"`);
+      } catch (clerkError) {
+        console.error('Failed to update Clerk organization:', clerkError);
+        // Continue with DynamoDB update even if Clerk fails
+        // This ensures we don't leave the user stuck
+      }
+    } else {
+      console.warn('CLERK_SECRET_KEY not configured, skipping Clerk API update');
+    }
+
+    // Complete onboarding in DynamoDB
+    const org = await repo.completeOnboarding(clerkOrgId, {
+      name: validated.name,
+      teamSize: validated.teamSize,
+    });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        data: org,
+        message: 'Onboarding completed successfully',
+      }),
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Validation error', details: error.errors }),
+      };
+    }
     return toErrorResponse(error);
   }
 }

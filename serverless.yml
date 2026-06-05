@@ -44,6 +44,8 @@ provider:
     CLERK_JWKS_URL: ${env:CLERK_JWKS_URL, 'https://tu-app.clerk.accounts.com/.well-known/jwks.json'}
     CLERK_ISSUER: ${env:CLERK_ISSUER, 'https://tu-app.clerk.accounts.com'}
     CLERK_WEBHOOK_SECRET: ${env:CLERK_WEBHOOK_SECRET, 'whsec_e8xKTyG00ObEUVhEI7waMxiinf7ylrWh'}
+    # Clerk Backend API key (for updating organizations in Clerk)
+    CLERK_SECRET_KEY: ${env:CLERK_SECRET_KEY, 'sk_test_JbLIXqTkc1hZIqMnLS9eIWQBBC4sStIrNGHsF6sQnY'}
   iam:
     role:
       statements:
@@ -332,6 +334,13 @@ functions:
       - httpApi:
           path: /organizations/{orgId}/members
           method: GET
+
+  completeOrganizationOnboarding:
+    handler: src/functions/organizations/handler.completeOnboarding
+    events:
+      - httpApi:
+          path: /organizations/{orgId}/complete-onboarding
+          method: POST
 
   # ===== Users endpoints =====
   getCurrentUser:
