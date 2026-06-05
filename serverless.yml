@@ -40,6 +40,10 @@ provider:
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
     # Credit note timezone (default: Venezuela)
     CREDIT_NOTE_TIMEZONE: ${env:CREDIT_NOTE_TIMEZONE, 'America/Caracas'}
+    # Clerk authentication
+    CLERK_JWKS_URL: ${env:CLERK_JWKS_URL, 'https://tu-app.clerk.accounts.com/.well-known/jwks.json'}
+    CLERK_ISSUER: ${env:CLERK_ISSUER, 'https://tu-app.clerk.accounts.com'}
+    CLERK_WEBHOOK_SECRET: ${env:CLERK_WEBHOOK_SECRET, 'whsec_e8xKTyG00ObEUVhEI7waMxiinf7ylrWh'}
   iam:
     role:
       statements:
