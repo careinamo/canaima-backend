@@ -4,7 +4,7 @@ export const main = async (event: APIGatewayProxyEventV2): Promise<APIGatewayPro
   return {
     statusCode: 200,
     body: JSON.stringify({
-      message: 'Hello from Canaima Backend!',
+      message: 'Hello from Canaima credito Backend!',
       event,
     }),
   };
