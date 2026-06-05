@@ -31,14 +31,15 @@ export async function main(event: APIGatewayProxyEventV2): Promise<APIGatewayPro
     }
 
     const payload = JSON.parse(body);
-    const eventId: string | undefined = payload.id;
+    // Event ID comes from Svix header, not from payload body
+    const eventId: string | undefined = headers['svix-id'];
     const eventType = payload.type;
 
     if (!eventId) {
-      console.warn('Missing event id in webhook payload');
+      console.warn('Missing svix-id header in webhook request');
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing event id' }),
+        body: JSON.stringify({ error: 'Missing svix-id header' }),
       };
     }
 
