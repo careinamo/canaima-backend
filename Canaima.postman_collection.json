@@ -855,6 +855,35 @@
             "description": "List all members of an organization"
           },
           "response": []
+        },
+        {
+          "name": "Complete Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corporation\",\n  \"teamSize\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{orgId}}/complete-onboarding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "organizations",
+                "{{orgId}}",
+                "complete-onboarding"
+              ]
+            },
+            "description": "Complete onboarding for an organization created via webhook. Updates the organization name in Clerk and sets onboardingCompleted to true in DynamoDB."
+          },
+          "response": []
         }
       ]
     },
@@ -958,9 +987,9 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000",
+      "value": "https://api-dev.canaimacredito.com",
       "type": "string",
-      "description": "Base URL for the API (http://localhost:3000 for local development)"
+      "description": "Base URL for the API (https://api-dev.canaimacredito.com for dev environment)"
     },
     {
       "key": "userId",
