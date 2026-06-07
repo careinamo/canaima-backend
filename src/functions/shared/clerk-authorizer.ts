@@ -12,10 +12,17 @@ const isOffline = process.env.IS_OFFLINE === 'true' || process.env.IS_LOCAL === 
 interface ClerkJWTPayload extends JWTPayload {
   sub: string;           // Clerk User ID
   azp?: string;          // Authorized party (your frontend URL)
-  org_id?: string;       // Organization ID (if user has active org)
-  org_role?: string;     // Role in organization (admin, member)
-  org_slug?: string;     // Organization slug
+  // Organization claims can be at top level OR in nested 'o' object
+  org_id?: string;       // Organization ID (if user has active org) - top level
+  org_role?: string;     // Role in organization (admin, member) - top level
+  org_slug?: string;     // Organization slug - top level
   org_permissions?: string[]; // Organization permissions
+  // Clerk also uses nested 'o' object format
+  o?: {
+    id?: string;         // Organization ID
+    rol?: string;        // Role (note: 'rol' not 'role')
+    slg?: string;        // Slug
+  };
 }
 
 export interface AuthContext {
@@ -139,13 +146,14 @@ export const handler = async (
     const clerkPayload = payload as ClerkJWTPayload;
     
     console.log('JWT verified successfully for user:', clerkPayload.sub);
+    console.log('Org claims - o:', clerkPayload.o, 'org_id:', clerkPayload.org_id);
     
-    // Build auth context
+    // Build auth context - support both nested 'o' object and top-level claims
     const context: AuthContext = {
       userId: clerkPayload.sub,
-      orgId: clerkPayload.org_id || null,
-      orgRole: clerkPayload.org_role || null,
-      orgSlug: clerkPayload.org_slug || null,
+      orgId: clerkPayload.o?.id || clerkPayload.org_id || null,
+      orgRole: clerkPayload.o?.rol || clerkPayload.org_role || null,
+      orgSlug: clerkPayload.o?.slg || clerkPayload.org_slug || null,
     };
     
     return {
