@@ -1,4 +1,4 @@
-import { APIGatewayProxyEventV2 } from 'aws-lambda';
+import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
 export interface AuthContext {
   userId: string;
@@ -6,6 +6,18 @@ export interface AuthContext {
   orgRole: string | null;
   orgSlug: string | null;
 }
+
+/**
+ * Standard 403 Forbidden response for organization access denial
+ */
+export const forbiddenResponse = (): APIGatewayProxyResultV2 => ({
+  statusCode: 403,
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+  },
+  body: JSON.stringify({ error: 'Forbidden: You do not have access to this organization' }),
+});
 
 /**
  * Extract authentication context from the request.
@@ -62,6 +74,25 @@ export function hasOrgAccess(event: APIGatewayProxyEventV2, requestedOrgId: stri
   }
   
   return auth.orgId === requestedOrgId;
+}
+
+/**
+ * Require organization access - returns 403 response if user doesn't have access.
+ * Use this at the start of handlers to validate org access.
+ * 
+ * @param event - API Gateway event
+ * @param requestedOrgId - The orgId from the URL path
+ * @returns null if access is granted, or 403 response if denied
+ * 
+ * @example
+ * const accessDenied = requireOrgAccess(event, orgId);
+ * if (accessDenied) return accessDenied;
+ */
+export function requireOrgAccess(event: APIGatewayProxyEventV2, requestedOrgId: string): APIGatewayProxyResultV2 | null {
+  if (!hasOrgAccess(event, requestedOrgId)) {
+    return forbiddenResponse();
+  }
+  return null;
 }
 
 /**

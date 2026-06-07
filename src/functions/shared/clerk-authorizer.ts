@@ -6,6 +6,9 @@ let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null;
 let jwksCacheTime = 0;
 const JWKS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
+// Check if running in local/offline mode
+const isOffline = process.env.IS_OFFLINE === 'true' || process.env.IS_LOCAL === 'true';
+
 interface ClerkJWTPayload extends JWTPayload {
   sub: string;           // Clerk User ID
   azp?: string;          // Authorized party (your frontend URL)
@@ -40,11 +43,67 @@ function getJWKS(): ReturnType<typeof createRemoteJWKSet> {
   return jwksCache;
 }
 
+/**
+ * Handle local development bypass.
+ * In offline mode, you can use these headers instead of a real JWT:
+ * - X-Dev-User-Id: user ID to simulate
+ * - X-Dev-Org-Id: organization ID to simulate  
+ * - X-Dev-Org-Role: role to simulate (admin, member)
+ */
+function handleLocalBypass(event: APIGatewayRequestAuthorizerEventV2): APIGatewaySimpleAuthorizerWithContextResult<AuthContext> | null {
+  if (!isOffline) {
+    return null;
+  }
+
+  const devUserId = event.headers?.['x-dev-user-id'];
+  const devOrgId = event.headers?.['x-dev-org-id'];
+  const devOrgRole = event.headers?.['x-dev-org-role'];
+
+  // If no auth header and no dev headers, use default dev user
+  const authHeader = event.headers?.authorization || event.headers?.Authorization;
+  
+  if (!authHeader && !devUserId) {
+    console.log('[DEV MODE] No auth - using default dev user');
+    return {
+      isAuthorized: true,
+      context: {
+        userId: 'dev_user_local',
+        orgId: 'org-default',
+        orgRole: 'admin',
+        orgSlug: null,
+      },
+    };
+  }
+
+  // If dev headers are provided, use them
+  if (devUserId) {
+    console.log('[DEV MODE] Using dev headers - userId:', devUserId, 'orgId:', devOrgId);
+    return {
+      isAuthorized: true,
+      context: {
+        userId: devUserId,
+        orgId: devOrgId || null,
+        orgRole: devOrgRole || null,
+        orgSlug: null,
+      },
+    };
+  }
+
+  // Has auth header, continue with normal validation
+  return null;
+}
+
 export const handler = async (
   event: APIGatewayRequestAuthorizerEventV2
 ): Promise<APIGatewaySimpleAuthorizerWithContextResult<AuthContext>> => {
   console.log('Authorizer invoked for:', event.routeKey);
   
+  // Check for local development bypass
+  const localBypass = handleLocalBypass(event);
+  if (localBypass) {
+    return localBypass;
+  }
+
   try {
     // Extract token from Authorization header
     const authHeader = event.headers?.authorization || event.headers?.Authorization;

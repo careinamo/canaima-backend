@@ -8,6 +8,7 @@ import { publishCrudEvent } from '../shared/crud-trigger';
 import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule, generateRuleName } from './eventbridge-utils';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { EventBridgeClient, DescribeRuleCommand } from '@aws-sdk/client-eventbridge';
+import { requireOrgAccess } from '../shared/auth';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -47,6 +48,10 @@ export const listCreditNotes = async (
   try {
     const orgId = event.pathParameters?.orgId;
     if (!orgId) return clientError(400, 'Missing orgId');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     const q = event.queryStringParameters ?? {};
 
@@ -103,6 +108,10 @@ export const getCreditNote = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing credit note id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     const creditNote = await repo.getCreditNoteById(orgId, id);
     if (!creditNote) return clientError(404, 'Credit note not found');
 
@@ -123,6 +132,10 @@ export const createCreditNote = async (
   try {
     const orgId = event.pathParameters?.orgId;
     if (!orgId) return clientError(400, 'Missing orgId');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     let body: unknown;
     try {
@@ -196,6 +209,10 @@ export const updateCreditNote = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing credit note id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     let body: unknown;
     try {
       body = JSON.parse(event.body ?? '{}');
@@ -238,6 +255,10 @@ export const deleteCreditNote = async (
     const id = event.pathParameters?.id;
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing credit note id');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     // Get the credit note first to capture clientId for the event
     const creditNote = await repo.getCreditNoteById(orgId, id);
@@ -292,6 +313,10 @@ export const checkExpirationManual = async (
     
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!noteId) return clientError(400, 'Missing credit note id');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     console.log(`Manual expiration check triggered for note ${noteId} in org ${orgId}`);
 
@@ -353,6 +378,10 @@ export const getExpirationRuleStatus = async (
     
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!noteId) return clientError(400, 'Missing credit note id');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     const ruleName = generateRuleName(orgId, noteId);
 

@@ -4,6 +4,7 @@ import * as repo from './repository';
 import { createOrganizationSchema, updateOrganizationSchema } from './validators';
 import { HttpError, toErrorResponse } from '../shared/errors';
 import { updateClerkOrganization, isClerkApiConfigured } from '../shared/clerk-api';
+import { requireOrgAccess } from '../shared/auth';
 
 class OrganizationError extends HttpError {}
 
@@ -44,6 +45,10 @@ export async function getOrganization(
     if (!clerkOrgId) {
       throw new OrganizationError(400, 'Missing orgId');
     }
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, clerkOrgId);
+    if (accessDenied) return accessDenied;
 
     const org = await repo.getOrg(clerkOrgId);
     if (!org) {
@@ -112,6 +117,10 @@ export async function updateOrganization(
       throw new OrganizationError(400, 'Missing orgId');
     }
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, clerkOrgId);
+    if (accessDenied) return accessDenied;
+
     const body = JSON.parse(event.body || '{}');
     const validated = updateOrganizationSchema.parse(body);
 
@@ -148,6 +157,10 @@ export async function listOrganizationMembers(
       throw new OrganizationError(400, 'Missing orgId');
     }
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, clerkOrgId);
+    if (accessDenied) return accessDenied;
+
     const members = await repo.listMembers(clerkOrgId);
 
     return {
@@ -180,6 +193,10 @@ export async function completeOnboarding(
     if (!clerkOrgId) {
       throw new OrganizationError(400, 'Missing orgId');
     }
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, clerkOrgId);
+    if (accessDenied) return accessDenied;
 
     // Verify organization exists
     const existingOrg = await repo.getOrg(clerkOrgId);
