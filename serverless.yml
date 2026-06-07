@@ -45,6 +45,7 @@ provider:
     TABLE_ORGANIZATIONS: ${env:TABLE_ORGANIZATIONS_BASE, 'organizations'}-${self:provider.stage}
     TABLE_USERS: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
+    TABLE_AUDIT_LOGS: ${env:TABLE_AUDIT_LOGS_BASE, 'audit-logs'}-${self:provider.stage}
     # Credit note timezone (default: Venezuela)
     CREDIT_NOTE_TIMEZONE: ${env:CREDIT_NOTE_TIMEZONE, 'America/Caracas'}
     # Clerk authentication
@@ -79,6 +80,8 @@ provider:
             - !Sub "${UsersTable.Arn}/index/*"
             - !GetAtt WebhookEventsTable.Arn
             - !Sub "${WebhookEventsTable.Arn}/index/*"
+            - !GetAtt AuditLogsTable.Arn
+            - !Sub "${AuditLogsTable.Arn}/index/*"
         - Effect: Allow
           Action:
             - lambda:InvokeFunction
@@ -401,6 +404,16 @@ functions:
           authorizer:
             name: clerkAuthorizer
 
+  # ===== Audit Logs endpoints =====
+  listAuditLogs:
+    handler: src/functions/audit-logs/handler.listAuditLogs
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/audit-logs
+          method: GET
+          authorizer:
+            name: clerkAuthorizer
+
   # ===== Users endpoints =====
   getCurrentUser:
     handler: src/functions/users/handler.getCurrentUser
@@ -630,6 +643,36 @@ resources:
             KeyType: HASH
           - AttributeName: SK
             KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    AuditLogsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_AUDIT_LOGS_BASE, 'audit-logs'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: orgId
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: gsi1pk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: orgId
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: byUser
+            KeySchema:
+              - AttributeName: gsi1pk
+                KeyType: HASH
+              - AttributeName: sk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true

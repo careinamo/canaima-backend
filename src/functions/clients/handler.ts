@@ -2,6 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import { ValidationError, validateCreateClient, validateUpdateClient, parseCsvClients } from './validators';
 import * as repo from './repository';
 import { requireOrgAccess } from '../shared/auth';
+import { logAuditEvent } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -134,6 +135,14 @@ export const createClient = async (
     }
 
     const client = await repo.createClient(orgId, input);
+
+    // Log audit event
+    logAuditEvent(event, 'CREATE', 'client', client.id, client.name, {
+      email: client.email,
+      phone: client.phone,
+      creditLimit: client.creditLimit,
+    });
+
     return respond(201, client);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -178,6 +187,11 @@ export const updateClient = async (
     const client = await repo.updateClient(orgId, id, input);
     if (!client) return clientError(404, 'Client not found');
 
+    // Log audit event
+    logAuditEvent(event, 'UPDATE', 'client', client.id, client.name, {
+      updatedFields: Object.keys(input),
+    });
+
     return respond(200, client);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -205,6 +219,9 @@ export const deleteClient = async (
 
     const deleted = await repo.deleteClient(orgId, id);
     if (!deleted) return clientError(404, 'Client not found');
+
+    // Log audit event
+    logAuditEvent(event, 'DELETE', 'client', id);
 
     return respond(200, { success: true, message: 'Client deleted' });
   } catch (error) {
@@ -246,6 +263,15 @@ export const bulkImportClients = async (
     // Create clients in batch
     const inputs = parseResult.valid.map(row => row.data);
     const result = await repo.createClientsBatch(orgId, inputs);
+
+    // Log audit event for bulk import
+    if (result.created.length > 0) {
+      logAuditEvent(event, 'CREATE', 'client', 'bulk-import', undefined, {
+        createdCount: result.created.length,
+        failedCount: result.errors.length,
+        clientIds: result.created.map(c => c.id),
+      });
+    }
 
     return respond(202, {
       summary: {

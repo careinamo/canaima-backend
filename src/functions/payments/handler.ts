@@ -6,6 +6,7 @@ import type { PaymentMethod, PaymentStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 import { publishCrudEvent } from '../shared/crud-trigger';
 import { requireOrgAccess } from '../shared/auth';
+import { logAuditEvent } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -171,6 +172,14 @@ export const createPayment = async (
       console.warn('Failed to trigger credit usage calculation:', err)
     );
 
+    // Log audit event
+    logAuditEvent(event, 'CREATE', 'payment', payment.id, undefined, {
+      clientId: payment.clientId,
+      creditNoteId: payment.creditNoteId,
+      amount: payment.amount,
+      method: payment.method,
+    });
+
     return respond(201, payment);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -229,6 +238,12 @@ export const updatePayment = async (
       console.warn('Failed to trigger credit usage calculation:', err)
     );
 
+    // Log audit event
+    logAuditEvent(event, 'UPDATE', 'payment', payment.id, undefined, {
+      clientId: payment.clientId,
+      updatedFields: Object.keys(input),
+    });
+
     return respond(200, payment);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -267,6 +282,9 @@ export const deletePayment = async (
     triggerCreditUsageCalculation(orgId).catch(err => 
       console.warn('Failed to trigger credit usage calculation:', err)
     );
+
+    // Log audit event
+    logAuditEvent(event, 'DELETE', 'payment', id);
 
     return respond(200, { success: true, message: 'Payment deleted' });
   } catch (error) {

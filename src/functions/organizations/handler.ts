@@ -5,6 +5,7 @@ import { createOrganizationSchema, updateOrganizationSchema } from './validators
 import { HttpError, toErrorResponse } from '../shared/errors';
 import { updateClerkOrganization, isClerkApiConfigured } from '../shared/clerk-api';
 import { requireOrgAccess } from '../shared/auth';
+import { logAuditEvent } from '../shared/audit-logger';
 
 class OrganizationError extends HttpError {}
 
@@ -86,6 +87,12 @@ export async function createOrganization(
       createdBy: 'anonymous',
     });
 
+    // Log audit event
+    logAuditEvent(event, 'CREATE', 'organization', org.clerkOrgId, org.name, {
+      teamSize: org.teamSize,
+      currency: org.currency,
+    });
+
     return {
       statusCode: 201,
       body: JSON.stringify({
@@ -125,6 +132,11 @@ export async function updateOrganization(
     const validated = updateOrganizationSchema.parse(body);
 
     const org = await repo.updateOrg(clerkOrgId, validated);
+
+    // Log audit event
+    logAuditEvent(event, 'UPDATE', 'organization', clerkOrgId, org?.name, {
+      updatedFields: Object.keys(validated),
+    });
 
     return {
       statusCode: 200,
@@ -238,6 +250,12 @@ export async function completeOnboarding(
     // Complete onboarding in DynamoDB
     const org = await repo.completeOnboarding(clerkOrgId, {
       name: validated.name,
+      teamSize: validated.teamSize,
+    });
+
+    // Log audit event
+    logAuditEvent(event, 'UPDATE', 'organization', clerkOrgId, validated.name, {
+      action: 'complete-onboarding',
       teamSize: validated.teamSize,
     });
 

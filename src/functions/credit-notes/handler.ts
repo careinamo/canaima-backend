@@ -9,6 +9,7 @@ import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule, generat
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { EventBridgeClient, DescribeRuleCommand } from '@aws-sdk/client-eventbridge';
 import { requireOrgAccess } from '../shared/auth';
+import { logAuditEvent } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -174,6 +175,14 @@ export const createCreditNote = async (
       console.warn('Failed to trigger credit usage calculation:', err)
     );
 
+    // Log audit event
+    logAuditEvent(event, 'CREATE', 'credit-note', creditNote.id, undefined, {
+      clientId: creditNote.clientId,
+      amount: creditNote.amount,
+      dueDate: creditNote.dueDate,
+      description: creditNote.description,
+    });
+
     return respond(201, creditNote);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -235,6 +244,12 @@ export const updateCreditNote = async (
       console.warn('Failed to trigger credit usage calculation:', err)
     );
 
+    // Log audit event
+    logAuditEvent(event, 'UPDATE', 'credit-note', creditNote.id, undefined, {
+      clientId: creditNote.clientId,
+      updatedFields: Object.keys(input),
+    });
+
     return respond(200, creditNote);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -288,6 +303,12 @@ export const deleteCreditNote = async (
     triggerCreditUsageCalculation(orgId).catch(err => 
       console.warn('Failed to trigger credit usage calculation:', err)
     );
+
+    // Log audit event
+    logAuditEvent(event, 'DELETE', 'credit-note', id, undefined, {
+      clientId: creditNote.clientId,
+      amount: creditNote.amount,
+    });
 
     return respond(200, { success: true, message: 'Credit note deleted' });
   } catch (error) {
