@@ -30,6 +30,8 @@ export const forbiddenResponse = (): APIGatewayProxyResultV2 => ({
 export function getAuth(event: APIGatewayProxyEventV2): AuthContext {
   const authorizer = (event.requestContext as any)?.authorizer?.lambda;
   
+  console.log('[AUTH] getAuth called, authorizer context:', JSON.stringify(authorizer));
+  
   if (!authorizer) {
     throw new Error('Missing authorizer context - ensure endpoint is protected');
   }

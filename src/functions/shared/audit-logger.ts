@@ -28,9 +28,10 @@ export function logAuditEvent(
   resourceName?: string,
   metadata?: Record<string, unknown>
 ): void {
+  console.log('[AUDIT] logAuditEvent called:', { action, resourceType, resourceId, resourceName });
   // Run async but don't await - fire and forget
   logAuditEventAsync(event, action, resourceType, resourceId, resourceName, metadata)
-    .catch(err => console.warn('Failed to log audit event:', err));
+    .catch(err => console.error('[AUDIT] Failed to log audit event:', err));
 }
 
 /**
@@ -44,11 +45,18 @@ async function logAuditEventAsync(
   resourceName?: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
+  console.log('[AUDIT] logAuditEventAsync started');
+  
   // Extract auth context
   const auth = getAuthOptional(event);
+  console.log('[AUDIT] Auth context:', {
+    hasAuth: !!auth,
+    orgId: auth?.orgId,
+    userId: auth?.userId,
+  });
   
   if (!auth || !auth.orgId || !auth.userId) {
-    console.warn('Cannot log audit event: missing auth context', {
+    console.warn('[AUDIT] Cannot log audit event: missing auth context', {
       hasAuth: !!auth,
       hasOrgId: !!auth?.orgId,
       hasUserId: !!auth?.userId,

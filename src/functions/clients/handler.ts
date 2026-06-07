@@ -137,6 +137,7 @@ export const createClient = async (
     const client = await repo.createClient(orgId, input);
 
     // Log audit event
+    console.log('[CLIENTS] About to call logAuditEvent for CREATE client:', client.id);
     logAuditEvent(event, 'CREATE', 'client', client.id, client.name, {
       email: client.email,
       phone: client.phone,

@@ -15,6 +15,8 @@ import type {
 const TABLE = process.env.TABLE_AUDIT_LOGS as string;
 const BY_USER_INDEX = 'byUser';
 
+console.log('[AUDIT-REPO] TABLE_AUDIT_LOGS:', TABLE);
+
 // TTL: 90 days by default (can be adjusted)
 const DEFAULT_TTL_DAYS = 90;
 
@@ -26,6 +28,9 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
  * Create a new audit log entry
  */
 export async function createAuditLog(input: CreateAuditLogInput): Promise<AuditLogEntry> {
+  console.log('[AUDIT-REPO] createAuditLog called with:', JSON.stringify(input));
+  console.log('[AUDIT-REPO] Using table:', TABLE);
+  
   const timestamp = new Date().toISOString();
   const eventId = `evt_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const sk = `${timestamp}#${eventId}`;
@@ -51,12 +56,16 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<AuditL
     ttl,
   };
 
+  console.log('[AUDIT-REPO] Saving entry to DynamoDB:', JSON.stringify(entry));
+  
   await ddb.send(
     new PutCommand({
       TableName: TABLE,
       Item: entry,
     })
   );
+  
+  console.log('[AUDIT-REPO] Entry saved successfully');
 
   return entry;
 }
