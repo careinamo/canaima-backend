@@ -17,6 +17,9 @@ custom:
 provider:
   name: aws
   runtime: nodejs24.x
+  architecture: arm64
+  memorySize: 256
+  timeout: 10
   region: ${self:custom.stages.${self:provider.stage}.region}
   stage: ${opt:stage, 'dev'}
   httpApi:
@@ -131,10 +134,12 @@ plugins:
 build:
   esbuild:
     bundle: true
-    minify: false
-    sourcemap: true
+    minify: true
+    sourcemap: false
     target: node24
     platform: node
+    external:
+      - '@aws-sdk/*'
 
 package:
   individually: true
@@ -200,6 +205,8 @@ functions:
 
   bulkImportClients:
     handler: src/functions/clients/handler.bulkImportClients
+    memorySize: 512
+    timeout: 30
     events:
       - httpApi:
           path: /orgs/{orgId}/clients/bulk-import
@@ -332,6 +339,8 @@ functions:
   # ===== Credit Usage calculation =====
   calculateCreditUsageScheduled:
     handler: src/functions/credit-usage/handler.scheduleHandler
+    memorySize: 512
+    timeout: 60
     events:
       - schedule:
           rate: cron(0 0 * * ? *)
@@ -344,6 +353,8 @@ functions:
   # ===== Unified Metrics SQS Consumer =====
   calculateMetrics:
     handler: src/functions/credit-usage/metrics-handler.calculateMetrics
+    memorySize: 512
+    timeout: 30
     events:
       - sqs:
           arn: !GetAtt MetricsQueue.Arn
