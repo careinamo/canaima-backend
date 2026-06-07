@@ -5,7 +5,7 @@ import { createOrganizationSchema, updateOrganizationSchema } from './validators
 import { HttpError, toErrorResponse } from '../shared/errors';
 import { updateClerkOrganization, isClerkApiConfigured } from '../shared/clerk-api';
 import { requireOrgAccess } from '../shared/auth';
-import { logAuditEvent } from '../shared/audit-logger';
+import { logAuditEventSync } from '../shared/audit-logger';
 
 class OrganizationError extends HttpError {}
 
@@ -88,7 +88,7 @@ export async function createOrganization(
     });
 
     // Log audit event
-    logAuditEvent(event, 'CREATE', 'organization', org.clerkOrgId, org.name, {
+    await logAuditEventSync(event, 'CREATE', 'organization', org.clerkOrgId, org.name, {
       teamSize: org.teamSize,
       currency: org.currency,
     });
@@ -134,7 +134,7 @@ export async function updateOrganization(
     const org = await repo.updateOrg(clerkOrgId, validated);
 
     // Log audit event
-    logAuditEvent(event, 'UPDATE', 'organization', clerkOrgId, org?.name, {
+    await logAuditEventSync(event, 'UPDATE', 'organization', clerkOrgId, org?.name, {
       updatedFields: Object.keys(validated),
     });
 
@@ -254,7 +254,7 @@ export async function completeOnboarding(
     });
 
     // Log audit event
-    logAuditEvent(event, 'UPDATE', 'organization', clerkOrgId, validated.name, {
+    await logAuditEventSync(event, 'UPDATE', 'organization', clerkOrgId, validated.name, {
       action: 'complete-onboarding',
       teamSize: validated.teamSize,
     });

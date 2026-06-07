@@ -9,7 +9,7 @@ import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule, generat
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { EventBridgeClient, DescribeRuleCommand } from '@aws-sdk/client-eventbridge';
 import { requireOrgAccess } from '../shared/auth';
-import { logAuditEvent } from '../shared/audit-logger';
+import { logAuditEventSync } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -176,7 +176,7 @@ export const createCreditNote = async (
     );
 
     // Log audit event
-    logAuditEvent(event, 'CREATE', 'credit-note', creditNote.id, undefined, {
+    await logAuditEventSync(event, 'CREATE', 'credit-note', creditNote.id, undefined, {
       clientId: creditNote.clientId,
       amount: creditNote.amount,
       dueDate: creditNote.dueDate,
@@ -245,7 +245,7 @@ export const updateCreditNote = async (
     );
 
     // Log audit event
-    logAuditEvent(event, 'UPDATE', 'credit-note', creditNote.id, undefined, {
+    await logAuditEventSync(event, 'UPDATE', 'credit-note', creditNote.id, undefined, {
       clientId: creditNote.clientId,
       updatedFields: Object.keys(input),
     });
@@ -305,7 +305,7 @@ export const deleteCreditNote = async (
     );
 
     // Log audit event
-    logAuditEvent(event, 'DELETE', 'credit-note', id, undefined, {
+    await logAuditEventSync(event, 'DELETE', 'credit-note', id, undefined, {
       clientId: creditNote.clientId,
       amount: creditNote.amount,
     });

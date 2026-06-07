@@ -2,7 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import { ValidationError, validateCreateClient, validateUpdateClient, parseCsvClients } from './validators';
 import * as repo from './repository';
 import { requireOrgAccess } from '../shared/auth';
-import { logAuditEvent } from '../shared/audit-logger';
+import { logAuditEventSync } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -136,9 +136,9 @@ export const createClient = async (
 
     const client = await repo.createClient(orgId, input);
 
-    // Log audit event
-    console.log('[CLIENTS] About to call logAuditEvent for CREATE client:', client.id);
-    logAuditEvent(event, 'CREATE', 'client', client.id, client.name, {
+    // Log audit event (await to ensure it completes before Lambda freezes)
+    console.log('[CLIENTS] About to call logAuditEventSync for CREATE client:', client.id);
+    await logAuditEventSync(event, 'CREATE', 'client', client.id, client.name, {
       email: client.email,
       phone: client.phone,
       creditLimit: client.creditLimit,
@@ -189,7 +189,7 @@ export const updateClient = async (
     if (!client) return clientError(404, 'Client not found');
 
     // Log audit event
-    logAuditEvent(event, 'UPDATE', 'client', client.id, client.name, {
+    await logAuditEventSync(event, 'UPDATE', 'client', client.id, client.name, {
       updatedFields: Object.keys(input),
     });
 
@@ -222,7 +222,7 @@ export const deleteClient = async (
     if (!deleted) return clientError(404, 'Client not found');
 
     // Log audit event
-    logAuditEvent(event, 'DELETE', 'client', id);
+    await logAuditEventSync(event, 'DELETE', 'client', id);
 
     return respond(200, { success: true, message: 'Client deleted' });
   } catch (error) {
@@ -267,7 +267,7 @@ export const bulkImportClients = async (
 
     // Log audit event for bulk import
     if (result.created.length > 0) {
-      logAuditEvent(event, 'CREATE', 'client', 'bulk-import', undefined, {
+      await logAuditEventSync(event, 'CREATE', 'client', 'bulk-import', undefined, {
         createdCount: result.created.length,
         failedCount: result.errors.length,
         clientIds: result.created.map(c => c.id),

@@ -6,7 +6,7 @@ import type { PaymentMethod, PaymentStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 import { publishCrudEvent } from '../shared/crud-trigger';
 import { requireOrgAccess } from '../shared/auth';
-import { logAuditEvent } from '../shared/audit-logger';
+import { logAuditEventSync } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -173,7 +173,7 @@ export const createPayment = async (
     );
 
     // Log audit event
-    logAuditEvent(event, 'CREATE', 'payment', payment.id, undefined, {
+    await logAuditEventSync(event, 'CREATE', 'payment', payment.id, undefined, {
       clientId: payment.clientId,
       creditNoteId: payment.creditNoteId,
       amount: payment.amount,
@@ -239,7 +239,7 @@ export const updatePayment = async (
     );
 
     // Log audit event
-    logAuditEvent(event, 'UPDATE', 'payment', payment.id, undefined, {
+    await logAuditEventSync(event, 'UPDATE', 'payment', payment.id, undefined, {
       clientId: payment.clientId,
       updatedFields: Object.keys(input),
     });
@@ -284,7 +284,7 @@ export const deletePayment = async (
     );
 
     // Log audit event
-    logAuditEvent(event, 'DELETE', 'payment', id);
+    await logAuditEventSync(event, 'DELETE', 'payment', id);
 
     return respond(200, { success: true, message: 'Payment deleted' });
   } catch (error) {
