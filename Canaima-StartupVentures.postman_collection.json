@@ -375,6 +375,55 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Audit Logs",
+      "description": "Audit logging endpoints",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/audit-logs?page=1&limit=50&sortOrder=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "List all audit logs for the organization"
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -407,6 +456,12 @@
       "value": "",
       "type": "string",
       "description": "Payment ID (fill after creating a payment)"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string",
+      "description": "Clerk JWT Bearer token for authentication"
     }
   ]
 }
