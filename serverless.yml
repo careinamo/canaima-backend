@@ -27,6 +27,13 @@ provider:
         - '*'
       allowedMethods:
         - '*'
+    authorizers:
+      clerkAuthorizer:
+        type: request
+        functionName: clerkAuthorizer
+        enableSimpleResponses: true
+        identitySource:
+          - $request.header.Authorization
   environment:
     NODE_ENV: ${self:provider.stage}
     # Existing tables
@@ -41,8 +48,8 @@ provider:
     # Credit note timezone (default: Venezuela)
     CREDIT_NOTE_TIMEZONE: ${env:CREDIT_NOTE_TIMEZONE, 'America/Caracas'}
     # Clerk authentication
-    CLERK_JWKS_URL: ${env:CLERK_JWKS_URL, 'https://tu-app.clerk.accounts.com/.well-known/jwks.json'}
-    CLERK_ISSUER: ${env:CLERK_ISSUER, 'https://tu-app.clerk.accounts.com'}
+    CLERK_JWKS_URL: ${env:CLERK_JWKS_URL, 'https://live-spaniel-88.clerk.accounts.dev/.well-known/jwks.json'}
+    CLERK_ISSUER: ${env:CLERK_ISSUER, 'https://live-spaniel-88.clerk.accounts.dev'}
     CLERK_WEBHOOK_SECRET: ${env:CLERK_WEBHOOK_SECRET, 'whsec_e8xKTyG00ObEUVhEI7waMxiinf7ylrWh'}
     # Clerk Backend API key (for updating organizations in Clerk)
     CLERK_SECRET_KEY: ${env:CLERK_SECRET_KEY, 'sk_test_JbLIXqTkc1hZIqMnLS9eIWQBBC4sStIrNGHsF6sQnY'}
@@ -130,7 +137,11 @@ package:
   individually: true
 
 functions:
-  # Hello endpoint
+  # ===== Clerk JWT Authorizer =====
+  clerkAuthorizer:
+    handler: src/functions/shared/clerk-authorizer.handler
+
+  # Hello endpoint (public - no auth)
   hello:
     handler: src/functions/hello/handler.main
     events:
@@ -145,6 +156,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getClient:
     handler: src/functions/clients/handler.getClient
@@ -152,6 +165,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createClient:
     handler: src/functions/clients/handler.createClient
@@ -159,6 +174,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updateClient:
     handler: src/functions/clients/handler.updateClient
@@ -166,6 +183,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: PUT
+          authorizer:
+            name: clerkAuthorizer
 
   deleteClient:
     handler: src/functions/clients/handler.deleteClient
@@ -173,6 +192,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: DELETE
+          authorizer:
+            name: clerkAuthorizer
 
   bulkImportClients:
     handler: src/functions/clients/handler.bulkImportClients
@@ -180,6 +201,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/bulk-import
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Credit Notes endpoints =====
   listCreditNotes:
@@ -189,6 +212,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getCreditNote:
     handler: src/functions/credit-notes/handler.getCreditNote
@@ -197,6 +222,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createCreditNote:
     handler: src/functions/credit-notes/handler.createCreditNote
@@ -205,6 +232,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updateCreditNote:
     handler: src/functions/credit-notes/handler.updateCreditNote
@@ -213,6 +242,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: PUT
+          authorizer:
+            name: clerkAuthorizer
 
   deleteCreditNote:
     handler: src/functions/credit-notes/handler.deleteCreditNote
@@ -221,6 +252,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: DELETE
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== DEBUG/TEST Endpoints for Credit Note Expiration =====
   checkExpirationManual:
@@ -230,6 +263,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}/manual-check-expiration
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   getExpirationRuleStatus:
     handler: src/functions/credit-notes/handler.getExpirationRuleStatus
@@ -238,6 +273,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}/expiration-rule-status
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Credit Notes Expiration Handler =====
   processCreditNoteExpiration:
@@ -250,6 +287,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getPayment:
     handler: src/functions/payments/handler.getPayment
@@ -257,6 +296,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createPayment:
     handler: src/functions/payments/handler.createPayment
@@ -264,6 +305,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updatePayment:
     handler: src/functions/payments/handler.updatePayment
@@ -271,6 +314,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: PUT
+          authorizer:
+            name: clerkAuthorizer
 
   deletePayment:
     handler: src/functions/payments/handler.deletePayment
@@ -278,6 +323,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: DELETE
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Credit Usage calculation =====
   calculateCreditUsageScheduled:
@@ -306,6 +353,8 @@ functions:
       - httpApi:
           path: /users/me/organizations
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getOrganization:
     handler: src/functions/organizations/handler.getOrganization
@@ -313,6 +362,8 @@ functions:
       - httpApi:
           path: /organizations/{orgId}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createOrganization:
     handler: src/functions/organizations/handler.createOrganization
@@ -320,6 +371,8 @@ functions:
       - httpApi:
           path: /organizations
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updateOrganization:
     handler: src/functions/organizations/handler.updateOrganization
@@ -327,6 +380,8 @@ functions:
       - httpApi:
           path: /organizations/{orgId}
           method: PATCH
+          authorizer:
+            name: clerkAuthorizer
 
   listOrganizationMembers:
     handler: src/functions/organizations/handler.listOrganizationMembers
@@ -334,6 +389,8 @@ functions:
       - httpApi:
           path: /organizations/{orgId}/members
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   completeOrganizationOnboarding:
     handler: src/functions/organizations/handler.completeOnboarding
@@ -341,6 +398,8 @@ functions:
       - httpApi:
           path: /organizations/{orgId}/complete-onboarding
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Users endpoints =====
   getCurrentUser:
@@ -349,6 +408,8 @@ functions:
       - httpApi:
           path: /users/me
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   updateCurrentUser:
     handler: src/functions/users/handler.updateCurrentUser
@@ -356,6 +417,8 @@ functions:
       - httpApi:
           path: /users/me
           method: PATCH
+          authorizer:
+            name: clerkAuthorizer
 
   getUser:
     handler: src/functions/users/handler.getUser
@@ -364,7 +427,7 @@ functions:
           path: /users/{userId}
           method: GET
 
-  # ===== Webhooks =====
+  # ===== Webhooks (public - no auth, uses Svix verification) =====
   clerkWebhook:
     handler: src/functions/webhooks/clerk/handler.main
     events:
