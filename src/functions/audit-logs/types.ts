@@ -11,6 +11,8 @@ export interface AuditLogEntry {
   sk: string; // timestamp#eventId for sorting
   eventId: string;
   userId: string;
+  userName?: string; // Full name of the user
+  userEmail?: string; // Email of the user
   gsi1pk: string; // orgId#userId for GSI
   action: AuditAction;
   resourceType: ResourceType;
@@ -26,6 +28,8 @@ export interface AuditLogEntry {
 export interface CreateAuditLogInput {
   orgId: string;
   userId: string;
+  userName?: string;
+  userEmail?: string;
   action: AuditAction;
   resourceType: ResourceType;
   resourceId: string;

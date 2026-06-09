@@ -14,6 +14,8 @@ El sistema de audit logs registra todas las operaciones de creación, actualizac
 | `sk` | String (SK) | Sort key: `{timestamp}#{eventId}` para ordenamiento por fecha |
 | `eventId` | String | ID único del evento (formato: `evt_xxxxxxxx`) |
 | `userId` | String | ID del usuario que realizó la acción |
+| `userName` | String? | Nombre completo del usuario (firstName + lastName) |
+| `userEmail` | String? | Email del usuario |
 | `gsi1pk` | String | GSI key para filtrar por usuario: `{orgId}#{userId}` |
 | `action` | String | Tipo de acción: `CREATE`, `UPDATE`, `DELETE` |
 | `resourceType` | String | Tipo de recurso: `client`, `credit-note`, `payment`, `organization` |
@@ -67,6 +69,8 @@ Lista los eventos de auditoría de una organización.
     {
       "eventId": "evt_a1b2c3d4",
       "userId": "user_xxx",
+      "userName": "John Doe",
+      "userEmail": "john@example.com",
       "action": "CREATE",
       "resourceType": "client",
       "resourceId": "cl_abc123",

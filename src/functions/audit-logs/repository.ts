@@ -44,6 +44,8 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<AuditL
     sk,
     eventId,
     userId: input.userId,
+    userName: input.userName,
+    userEmail: input.userEmail,
     gsi1pk,
     action: input.action,
     resourceType: input.resourceType,

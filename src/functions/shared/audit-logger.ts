@@ -1,6 +1,7 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { createAuditLog } from '../audit-logs/repository';
 import type { AuditAction, ResourceType, CreateAuditLogInput } from '../audit-logs/types';
+import { getUser } from '../users/repository';
 import { getAuthOptional } from './auth';
 
 /**
@@ -64,6 +65,20 @@ async function logAuditEventAsync(
     return;
   }
 
+  // Fetch user details for userName and userEmail
+  let userName: string | undefined;
+  let userEmail: string | undefined;
+  try {
+    const user = await getUser(auth.userId);
+    if (user) {
+      userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || undefined;
+      userEmail = user.email;
+    }
+  } catch (err) {
+    console.warn('[AUDIT] Failed to fetch user details:', err);
+    // Continue without user details
+  }
+
   // Extract IP and User-Agent
   const ipAddress = event.requestContext?.http?.sourceIp || 
     event.headers?.['x-forwarded-for']?.split(',')[0]?.trim();
@@ -72,6 +87,8 @@ async function logAuditEventAsync(
   const input: CreateAuditLogInput = {
     orgId: auth.orgId,
     userId: auth.userId,
+    userName,
+    userEmail,
     action,
     resourceType,
     resourceId,
