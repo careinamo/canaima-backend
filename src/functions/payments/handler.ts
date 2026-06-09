@@ -270,11 +270,19 @@ export const deletePayment = async (
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
 
+    // Get payment before deleting (to have clientId for delinquency check)
+    const payment = await repo.getPaymentById(orgId, id);
+    if (!payment) return clientError(404, 'Payment not found');
+
     const deleted = await repo.deletePayment(orgId, id);
     if (!deleted) return clientError(404, 'Payment not found');
 
-    // Publish PaymentDeleted CRUD event
-    publishCrudEvent('PaymentDeleted', orgId, id).catch(err =>
+    // Publish PaymentDeleted CRUD event (include payment data for clientId)
+    publishCrudEvent('PaymentDeleted', orgId, id, {
+      clientId: payment.clientId,
+      creditNoteId: payment.creditNoteId,
+      amount: payment.amount,
+    }).catch(err =>
       console.warn('Failed to publish PaymentDeleted event:', err)
     );
 

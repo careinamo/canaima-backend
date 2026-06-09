@@ -105,7 +105,9 @@ Estos son eventos **granulares y simples** que se disparan en cada operación CR
 **Source:** `canaima.crud`  
 **DetailType:** `PaymentCreated`  
 **Disparo:** Cuando se crea un nuevo payment  
-**Destino:** SQS Queue → Lambda (metrics-handler)
+**Destino:** 
+  1. SQS Queue → Lambda (metrics-handler)
+  2. SQS Queue → Lambda (client-delinquency-check)
 
 ```json
 {
@@ -121,10 +123,9 @@ Estos son eventos **granulares y simples** que se disparan en cada operación CR
 }
 ```
 
-**Procesadores Futuros:**
-- [ ] Actualizar estado de credit notes (si está 100% pagado → status = "paid")
-- [ ] Notificaciones de pago recibido
-- [ ] Auditoría de transacciones
+**Procesadores Actuales:**
+- ✅ Actualiza métricas mensuales de payments
+- ✅ Re-valida si el cliente sigue siendo delinquent
 
 ---
 
@@ -133,7 +134,27 @@ Estos son eventos **granulares y simples** que se disparan en cada operación CR
 **Source:** `canaima.crud`  
 **DetailType:** `PaymentUpdated`  
 **Disparo:** Cuando se actualiza un payment  
-**Destino:** SQS Queue → Lambda (metrics-handler)
+**Destino:** 
+  1. SQS Queue → Lambda (metrics-handler)
+  2. SQS Queue → Lambda (client-delinquency-check)
+
+```json
+{
+  "source": "canaima.crud",
+  "detail-type": "PaymentUpdated",
+  "detail": {
+    "type": "PaymentUpdated",
+    "orgId": "org_xxxxx",
+    "entityId": "uuid-xxxxx",
+    "data": { /* updated payment object */ },
+    "timestamp": "2026-05-30T10:30:00.000Z"
+  }
+}
+```
+
+**Procesadores Actuales:**
+- ✅ Actualiza métricas mensuales de payments
+- ✅ Re-valida si el cliente sigue siendo delinquent
 
 ---
 
@@ -142,7 +163,27 @@ Estos son eventos **granulares y simples** que se disparan en cada operación CR
 **Source:** `canaima.crud`  
 **DetailType:** `PaymentDeleted`  
 **Disparo:** Cuando se elimina un payment  
-**Destino:** SQS Queue → Lambda (metrics-handler)
+**Destino:** 
+  1. SQS Queue → Lambda (metrics-handler)
+  2. SQS Queue → Lambda (client-delinquency-check)
+
+```json
+{
+  "source": "canaima.crud",
+  "detail-type": "PaymentDeleted",
+  "detail": {
+    "type": "PaymentDeleted",
+    "orgId": "org_xxxxx",
+    "entityId": "uuid-xxxxx",
+    "data": { "clientId": "xxx", "creditNoteId": "xxx", "amount": 1000 },
+    "timestamp": "2026-05-30T10:30:00.000Z"
+  }
+}
+```
+
+**Procesadores Actuales:**
+- ✅ Actualiza métricas mensuales de payments
+- ✅ Re-valida si el cliente sigue siendo delinquent
 
 ---
 
@@ -241,6 +282,7 @@ POST /payments
 graph TB
     subgraph "CRUD Events"
         CN["CreditNoteCreated/Updated/Deleted"]
+        CNP["CreditNotePaid"]
         PM["PaymentCreated/Updated/Deleted"]
     end
     
@@ -249,17 +291,13 @@ graph TB
         CM["CreditNoteMetricsUpdateRequested"]
     end
     
-    subgraph "Credit Notes Events"
-        CND["CreditNoteDeletedEvent"]
-    end
-    
     subgraph "EventBridge Bus"
         EB["default"]
     end
     
     subgraph "Rules & Routing"
         MR["MetricsEventRule<br/>(source: canaima.crud, canaima.metrics)"]
-        CDR["CreditNoteDeletedRule<br/>(source: canaima.credit-notes)"]
+        CSR["ClientStatusCheckRule<br/>(CreditNoteDeleted, CreditNotePaid,<br/>PaymentCreated/Updated/Deleted)"]
     end
     
     subgraph "SQS Queues"
@@ -273,16 +311,16 @@ graph TB
     end
     
     CN --> EB
+    CNP --> EB
     PM --> EB
     CU --> EB
     CM --> EB
-    CND --> EB
     
     EB --> MR
-    EB --> CDR
+    EB --> CSR
     
     MR --> MQ
-    CDR --> DCQ
+    CSR --> DCQ
     
     MQ --> MH
     DCQ --> CDC

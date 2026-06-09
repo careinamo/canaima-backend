@@ -803,6 +803,9 @@ resources:
           detail-type:
             - CreditNoteDeleted
             - CreditNotePaid
+            - PaymentCreated
+            - PaymentUpdated
+            - PaymentDeleted
         State: ENABLED
         Targets:
           - Arn: !GetAtt ClientDelinquencyCheckQueue.Arn
