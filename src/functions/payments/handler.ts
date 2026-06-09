@@ -5,6 +5,8 @@ import * as creditNotesRepo from '../credit-notes/repository';
 import type { PaymentMethod, PaymentStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 import { publishCrudEvent } from '../shared/crud-trigger';
+import { requireOrgAccess } from '../shared/auth';
+import { logAuditEventSync } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -38,6 +40,10 @@ export const listPayments = async (
   try {
     const orgId = event.pathParameters?.orgId;
     if (!orgId) return clientError(400, 'Missing orgId');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     const q = event.queryStringParameters ?? {};
 
@@ -100,6 +106,10 @@ export const getPayment = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing payment id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     const payment = await repo.getPaymentById(orgId, id);
     if (!payment) return clientError(404, 'Payment not found');
 
@@ -120,6 +130,10 @@ export const createPayment = async (
   try {
     const orgId = event.pathParameters?.orgId;
     if (!orgId) return clientError(400, 'Missing orgId');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     let body: unknown;
     try {
@@ -158,6 +172,14 @@ export const createPayment = async (
       console.warn('Failed to trigger credit usage calculation:', err)
     );
 
+    // Log audit event
+    await logAuditEventSync(event, 'CREATE', 'payment', payment.id, undefined, {
+      clientId: payment.clientId,
+      creditNoteId: payment.creditNoteId,
+      amount: payment.amount,
+      method: payment.method,
+    });
+
     return respond(201, payment);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -190,6 +212,10 @@ export const updatePayment = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing payment id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     let body: unknown;
     try {
       body = JSON.parse(event.body ?? '{}');
@@ -211,6 +237,12 @@ export const updatePayment = async (
     triggerCreditUsageCalculation(orgId).catch(err => 
       console.warn('Failed to trigger credit usage calculation:', err)
     );
+
+    // Log audit event
+    await logAuditEventSync(event, 'UPDATE', 'payment', payment.id, undefined, {
+      clientId: payment.clientId,
+      updatedFields: Object.keys(input),
+    });
 
     return respond(200, payment);
   } catch (e) {
@@ -234,11 +266,23 @@ export const deletePayment = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing payment id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
+    // Get payment before deleting (to have clientId for delinquency check)
+    const payment = await repo.getPaymentById(orgId, id);
+    if (!payment) return clientError(404, 'Payment not found');
+
     const deleted = await repo.deletePayment(orgId, id);
     if (!deleted) return clientError(404, 'Payment not found');
 
-    // Publish PaymentDeleted CRUD event
-    publishCrudEvent('PaymentDeleted', orgId, id).catch(err =>
+    // Publish PaymentDeleted CRUD event (include payment data for clientId)
+    publishCrudEvent('PaymentDeleted', orgId, id, {
+      clientId: payment.clientId,
+      creditNoteId: payment.creditNoteId,
+      amount: payment.amount,
+    }).catch(err =>
       console.warn('Failed to publish PaymentDeleted event:', err)
     );
 
@@ -246,6 +290,9 @@ export const deletePayment = async (
     triggerCreditUsageCalculation(orgId).catch(err => 
       console.warn('Failed to trigger credit usage calculation:', err)
     );
+
+    // Log audit event
+    await logAuditEventSync(event, 'DELETE', 'payment', id);
 
     return respond(200, { success: true, message: 'Payment deleted' });
   } catch (error) {

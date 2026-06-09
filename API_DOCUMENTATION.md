@@ -1536,6 +1536,781 @@ curl -X DELETE "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41
 
 ---
 
+## Organizations API Endpoints
+
+### Overview
+
+The Organizations module manages multi-tenant organization accounts. Organizations are synced with Clerk and store additional business metadata. All endpoints require authentication via Clerk JWT.
+
+Base paths:
+- `/users/me/organizations` — User's organizations
+- `/organizations` — Organization management
+- `/organizations/{orgId}` — Single organization operations
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|--------------|
+| **GET** | `/users/me/organizations` | `listUserOrganizations` | List organizations for current user | 200 |
+| **GET** | `/organizations/{orgId}` | `getOrganization` | Get organization details | 200, 400, 404 |
+| **POST** | `/organizations` | `createOrganization` | Create/upsert organization | 201, 400 |
+| **PATCH** | `/organizations/{orgId}` | `updateOrganization` | Update organization | 200, 400, 404 |
+| **GET** | `/organizations/{orgId}/members` | `listOrganizationMembers` | List organization members | 200, 400 |
+| **POST** | `/organizations/{orgId}/complete-onboarding` | `completeOnboarding` | Complete onboarding flow | 200, 400, 404 |
+
+---
+
+### 1. GET /users/me/organizations — List User Organizations
+
+List all organizations the current user belongs to.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `userId` | string | User ID (temporary, will be extracted from JWT) |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/users/me/organizations?userId=user_abc123"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "orgId": "org_abc123",
+      "name": "Acme Corp",
+      "role": "admin",
+      "joinedAt": "2026-01-15T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 2. GET /organizations/{orgId} — Get Organization
+
+Retrieve organization details.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Clerk Organization ID |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/organizations/org_abc123" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "clerkOrgId": "org_abc123",
+    "name": "Acme Corp",
+    "slug": "acme-corp",
+    "teamSize": 10,
+    "plan": "starter",
+    "currency": "USD",
+    "settings": {},
+    "createdBy": "user_xyz",
+    "onboardingCompleted": true,
+    "onboardingCompletedAt": "2026-01-15T12:00:00.000Z",
+    "createdAt": "2026-01-15T10:30:00.000Z",
+    "updatedAt": "2026-01-15T12:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing orgId
+- **404 Not Found**: Organization not found
+
+---
+
+### 3. POST /organizations — Create Organization
+
+Create or upsert an organization.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `clerkOrgId` | string | ✓ | Clerk Organization ID |
+| `name` | string | ✓ | Organization name (1-255 chars) |
+| `teamSize` | number | - | Team size (integer ≥ 1) |
+| `currency` | string | - | ISO 4217 currency code (default: `USD`) |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:3000/organizations" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "clerkOrgId": "org_abc123",
+    "name": "Acme Corp",
+    "teamSize": 10,
+    "currency": "USD"
+  }'
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "data": {
+    "clerkOrgId": "org_abc123",
+    "name": "Acme Corp",
+    "slug": "acme-corp",
+    "teamSize": 10,
+    "plan": "free",
+    "currency": "USD",
+    "onboardingCompleted": false,
+    "createdBy": "anonymous",
+    "createdAt": "2026-06-08T10:30:00.000Z",
+    "updatedAt": "2026-06-08T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Validation error (missing required fields, invalid format)
+
+---
+
+### 4. PATCH /organizations/{orgId} — Update Organization
+
+Update organization fields.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Clerk Organization ID |
+
+**Request Body:** (all fields optional)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Organization name (1-255 chars) |
+| `teamSize` | number | Team size (integer ≥ 1) |
+| `currency` | string | ISO 4217 currency code (3 chars) |
+| `settings` | object | Additional settings (JSON) |
+| `plan` | string | Plan: `free`, `starter`, `pro`, `enterprise` |
+
+**Example Request:**
+
+```bash
+curl -X PATCH "http://localhost:3000/organizations/org_abc123" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "teamSize": 25,
+    "plan": "pro"
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "clerkOrgId": "org_abc123",
+    "name": "Acme Corp",
+    "teamSize": 25,
+    "plan": "pro",
+    "currency": "USD",
+    "onboardingCompleted": true,
+    "updatedAt": "2026-06-08T11:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Validation error
+- **404 Not Found**: Organization not found
+
+---
+
+### 5. GET /organizations/{orgId}/members — List Organization Members
+
+List all members of an organization.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Clerk Organization ID |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/organizations/org_abc123/members" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "userId": "user_xyz",
+      "role": "admin",
+      "status": "active",
+      "email": "admin@acme.com",
+      "joinedAt": "2026-01-15T10:30:00.000Z"
+    },
+    {
+      "userId": "user_abc",
+      "role": "member",
+      "status": "active",
+      "email": "member@acme.com",
+      "joinedAt": "2026-02-01T09:00:00.000Z",
+      "invitedBy": "user_xyz"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing orgId
+
+---
+
+### 6. POST /organizations/{orgId}/complete-onboarding — Complete Onboarding
+
+Complete the organization onboarding flow. Updates name and team size, syncs to Clerk, and marks onboarding as complete.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Clerk Organization ID |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | ✓ | Organization name |
+| `teamSize` | number | ✓ | Team size (integer ≥ 1) |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:3000/organizations/org_abc123/complete-onboarding" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "name": "Acme Corporation",
+    "teamSize": 15
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "clerkOrgId": "org_abc123",
+    "name": "Acme Corporation",
+    "teamSize": 15,
+    "onboardingCompleted": true,
+    "onboardingCompletedAt": "2026-06-08T10:30:00.000Z",
+    "updatedAt": "2026-06-08T10:30:00.000Z"
+  },
+  "message": "Onboarding completed successfully"
+}
+```
+
+**Response (200 OK) — Already Completed:**
+
+```json
+{
+  "data": { ... },
+  "message": "Onboarding already completed"
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Validation error (missing name or teamSize)
+- **404 Not Found**: Organization not found
+
+---
+
+## Users API Endpoints
+
+### Overview
+
+The Users module manages user profiles synced from Clerk. User data is populated via webhooks and can be retrieved/updated via these endpoints.
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|--------------|
+| **GET** | `/users/me` | `getCurrentUser` | Get current user profile | 200, 400, 404 |
+| **PATCH** | `/users/me` | `updateCurrentUser` | Update current user profile | 200, 400 |
+| **GET** | `/users/{userId}` | `getUser` | Get user public profile (no auth) | 200, 400, 404 |
+
+---
+
+### 1. GET /users/me — Get Current User
+
+Get the current user's full profile.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `userId` | string | ✓ | Clerk User ID |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/users/me?userId=user_abc123" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "clerkUserId": "user_abc123",
+    "email": "john@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "imageUrl": "https://img.clerk.com/abc123",
+    "createdAt": "2026-01-15T10:30:00.000Z",
+    "updatedAt": "2026-06-08T09:00:00.000Z",
+    "lastSignInAt": "2026-06-08T08:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing userId parameter
+- **404 Not Found**: User profile not found
+
+---
+
+### 2. PATCH /users/me — Update Current User
+
+Update the current user's profile.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `userId` | string | ✓ | Clerk User ID |
+
+**Request Body:** (all fields optional)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `firstName` | string | First name (1-255 chars) |
+| `lastName` | string | Last name (1-255 chars) |
+| `imageUrl` | string | Profile image URL (valid URL) |
+
+**Example Request:**
+
+```bash
+curl -X PATCH "http://localhost:3000/users/me?userId=user_abc123" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "firstName": "Johnny",
+    "lastName": "Doe"
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "clerkUserId": "user_abc123",
+    "email": "john@example.com",
+    "firstName": "Johnny",
+    "lastName": "Doe",
+    "imageUrl": "https://img.clerk.com/abc123",
+    "updatedAt": "2026-06-08T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing userId or validation error
+
+---
+
+### 3. GET /users/{userId} — Get User Public Profile
+
+Get a user's public profile (no authentication required).
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `userId` | string | Clerk User ID |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/users/user_abc123"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "clerkUserId": "user_abc123",
+    "firstName": "John",
+    "lastName": "Doe",
+    "imageUrl": "https://img.clerk.com/abc123"
+  }
+}
+```
+
+> **Note:** Only public fields are returned (no email or timestamps).
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing userId
+- **404 Not Found**: User not found
+
+---
+
+## Audit Logs API Endpoints
+
+### Overview
+
+The Audit Logs module provides read access to audit trail records. All CRUD operations on clients, credit notes, payments, and organizations are automatically logged.
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|--------------|
+| **GET** | `/orgs/{orgId}/audit-logs` | `listAuditLogs` | List audit logs with filters | 200, 400 |
+
+---
+
+### 1. GET /orgs/{orgId}/audit-logs — List Audit Logs
+
+Retrieve paginated audit logs for an organization with filtering options.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `userId` | string | - | Filter by specific user |
+| `startDate` | string | - | Start date (ISO 8601: `YYYY-MM-DD`) |
+| `endDate` | string | - | End date (ISO 8601: `YYYY-MM-DD`) |
+| `action` | string | - | Filter by action: `CREATE`, `UPDATE`, `DELETE` |
+| `resourceType` | string | - | Filter by type: `client`, `credit-note`, `payment`, `organization` |
+| `resourceId` | string | - | Filter by specific resource ID |
+| `page` | number | 1 | Page number |
+| `limit` | number | 50 | Items per page (max: 100) |
+| `sortOrder` | string | `desc` | Sort order: `asc` or `desc` |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/audit-logs?startDate=2026-06-01&endDate=2026-06-07&action=CREATE&resourceType=client&limit=20" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "orgId": "org-default",
+      "eventId": "evt_abc123",
+      "userId": "user_xyz",
+      "userName": "John Doe",
+      "userEmail": "john@example.com",
+      "action": "CREATE",
+      "resourceType": "client",
+      "resourceId": "550e8400-e29b-41d4-a716-446655440001",
+      "resourceName": "Acme Corporation",
+      "timestamp": "2026-06-05T14:30:00.000Z",
+      "ipAddress": "192.168.1.100",
+      "userAgent": "Mozilla/5.0...",
+      "metadata": {
+        "creditLimit": 50000
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalPages": 3,
+    "totalCount": 45,
+    "hasMore": true
+  }
+}
+```
+
+**Audit Log Entry Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `orgId` | string | Organization ID |
+| `eventId` | string | Unique event identifier |
+| `userId` | string | User who performed the action |
+| `userName` | string | Full name of the user (optional) |
+| `userEmail` | string | Email of the user (optional) |
+| `action` | string | `CREATE`, `UPDATE`, or `DELETE` |
+| `resourceType` | string | `client`, `credit-note`, `payment`, `organization` |
+| `resourceId` | string | ID of affected resource |
+| `resourceName` | string | Name/identifier of resource (optional) |
+| `timestamp` | string | ISO 8601 timestamp |
+| `ipAddress` | string | Client IP address (optional) |
+| `userAgent` | string | Browser/client user agent (optional) |
+| `metadata` | object | Additional context (optional) |
+
+**Error Responses:**
+
+- **400 Bad Request**: Invalid action or resourceType value
+
+---
+
+## Webhooks API Endpoints
+
+### Overview
+
+The Webhooks module handles incoming webhooks from Clerk for user and organization synchronization. All webhooks are verified using Svix signatures and processed idempotently.
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|--------------|
+| **POST** | `/webhooks/clerk` | `main` | Process Clerk webhook events | 200, 400, 401, 500 |
+
+---
+
+### POST /webhooks/clerk — Clerk Webhook Handler
+
+Receives and processes Clerk webhook events. **No authentication required** — verification is done via Svix signature.
+
+**Headers Required:**
+
+| Header | Description |
+|--------|-------------|
+| `svix-id` | Unique event ID from Svix |
+| `svix-timestamp` | Event timestamp |
+| `svix-signature` | HMAC signature for verification |
+
+**Supported Event Types:**
+
+| Event Type | Description |
+|------------|-------------|
+| `user.created` | New user registered in Clerk |
+| `user.updated` | User profile updated |
+| `user.deleted` | User deleted |
+| `organization.created` | New organization created |
+| `organization.updated` | Organization updated |
+| `organization.deleted` | Organization deleted |
+| `organizationMembership.created` | User joined organization |
+| `organizationMembership.updated` | Membership role changed |
+| `organizationMembership.deleted` | User left organization |
+
+**Example Request (from Clerk):**
+
+```bash
+curl -X POST "http://localhost:3000/webhooks/clerk" \
+  -H "Content-Type: application/json" \
+  -H "svix-id: msg_abc123" \
+  -H "svix-timestamp: 1654012800" \
+  -H "svix-signature: v1,g0hM9SsE..." \
+  -d '{
+    "type": "user.created",
+    "data": {
+      "id": "user_abc123",
+      "email_addresses": [{"email_address": "john@example.com"}],
+      "first_name": "John",
+      "last_name": "Doe"
+    }
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Event processed"
+}
+```
+
+**Response (200 OK) — Duplicate Event:**
+
+```json
+{
+  "message": "Event already processed"
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing svix-id header
+- **401 Unauthorized**: Invalid Svix signature
+- **500 Internal Server Error**: Processing error
+
+---
+
+## Health Check Endpoint
+
+### GET /hello — Health Check
+
+Simple health check endpoint. **No authentication required.**
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/hello"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Hello from Canaima Backend!"
+}
+```
+
+---
+
+## Credit Notes Debug Endpoints
+
+### Overview
+
+Debug endpoints for testing credit note expiration functionality. These endpoints are protected by authentication and should only be used in development/testing.
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|--------------|
+| **POST** | `/orgs/{orgId}/credit-notes/{id}/manual-check-expiration` | `checkExpirationManual` | Manually trigger expiration check | 200, 400, 404 |
+| **GET** | `/orgs/{orgId}/credit-notes/{id}/expiration-rule-status` | `getExpirationRuleStatus` | Get EventBridge rule status | 200, 400, 404 |
+
+---
+
+### 1. POST /orgs/{orgId}/credit-notes/{id}/manual-check-expiration
+
+Manually invoke the credit note expiration Lambda for testing purposes.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+| `id` | string | Credit Note UUID |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716-446655550001/manual-check-expiration" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "Manual expiration check executed",
+  "lambdaResponse": {
+    "statusCode": 200,
+    "body": "{\"message\": \"Credit note processed\"}"
+  },
+  "statusCode": 200
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing orgId or id
+- **404 Not Found**: Credit note not found
+
+---
+
+### 2. GET /orgs/{orgId}/credit-notes/{id}/expiration-rule-status
+
+Check if an EventBridge rule exists for a credit note and its current status.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+| `id` | string | Credit Note UUID |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b-41d4-a716-446655550001/expiration-rule-status" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK) — Rule Exists:**
+
+```json
+{
+  "success": true,
+  "ruleName": "cn-org-default-660e8400-expiration",
+  "rule": {
+    "Name": "cn-org-default-660e8400-expiration",
+    "Description": "Credit note expiration for 660e8400...",
+    "State": "ENABLED",
+    "ScheduleExpression": "at(2026-06-15T00:00:00)",
+    "Arn": "arn:aws:events:us-east-2:123456789:rule/cn-..."
+  }
+}
+```
+
+**Response (404 Not Found) — Rule Does Not Exist:**
+
+```json
+{
+  "success": false,
+  "message": "EventBridge rule not found",
+  "ruleName": "cn-org-default-660e8400-expiration",
+  "error": "No rule named \"cn-org-default-660e8400-expiration\" exists"
+}
+```
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing orgId or id
+
+---
+
 ## DynamoDB Table Schemas
 
 ### Clients Table

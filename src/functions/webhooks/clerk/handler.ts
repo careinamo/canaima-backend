@@ -31,14 +31,15 @@ export async function main(event: APIGatewayProxyEventV2): Promise<APIGatewayPro
     }
 
     const payload = JSON.parse(body);
-    const eventId: string | undefined = payload.id;
+    // Event ID comes from Svix header, not from payload body
+    const eventId: string | undefined = headers['svix-id'];
     const eventType = payload.type;
 
     if (!eventId) {
-      console.warn('Missing event id in webhook payload');
+      console.warn('Missing svix-id header in webhook request');
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Missing event id' }),
+        body: JSON.stringify({ error: 'Missing svix-id header' }),
       };
     }
 
@@ -140,9 +141,16 @@ async function handleUserDeleted(data: any) {
 
 async function handleOrganizationCreated(data: any) {
   console.log('Handling organization.created:', data.id);
-  // For now, just acknowledge. Full metadata comes from POST /organizations
-  // But we can store basic info from Clerk
-  // The user who created it should call POST /organizations to set metadata
+  
+  // Create organization in DynamoDB from Clerk webhook data
+  // This creates a basic org entry with onboardingCompleted=false
+  // The user will complete onboarding via PATCH /organizations/{orgId}
+  await orgsRepo.createOrgFromWebhook({
+    clerkOrgId: data.id,
+    name: data.name || 'Unnamed Organization',
+    slug: data.slug,
+    createdBy: data.created_by || 'unknown', // Clerk user ID who created the org
+  });
 }
 
 async function handleOrganizationUpdated(data: any) {

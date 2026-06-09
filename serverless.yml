@@ -17,6 +17,9 @@ custom:
 provider:
   name: aws
   runtime: nodejs24.x
+  architecture: arm64
+  memorySize: 256
+  timeout: 10
   region: ${self:custom.stages.${self:provider.stage}.region}
   stage: ${opt:stage, 'dev'}
   httpApi:
@@ -27,6 +30,13 @@ provider:
         - '*'
       allowedMethods:
         - '*'
+    authorizers:
+      clerkAuthorizer:
+        type: request
+        functionName: clerkAuthorizer
+        enableSimpleResponses: true
+        identitySource:
+          - $request.header.Authorization
   environment:
     NODE_ENV: ${self:provider.stage}
     # Existing tables
@@ -38,8 +48,15 @@ provider:
     TABLE_ORGANIZATIONS: ${env:TABLE_ORGANIZATIONS_BASE, 'organizations'}-${self:provider.stage}
     TABLE_USERS: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
+    TABLE_AUDIT_LOGS: ${env:TABLE_AUDIT_LOGS_BASE, 'audit-logs'}-${self:provider.stage}
     # Credit note timezone (default: Venezuela)
     CREDIT_NOTE_TIMEZONE: ${env:CREDIT_NOTE_TIMEZONE, 'America/Caracas'}
+    # Clerk authentication
+    CLERK_JWKS_URL: ${env:CLERK_JWKS_URL, 'https://live-spaniel-88.clerk.accounts.dev/.well-known/jwks.json'}
+    CLERK_ISSUER: ${env:CLERK_ISSUER, 'https://live-spaniel-88.clerk.accounts.dev'}
+    CLERK_WEBHOOK_SECRET: ${env:CLERK_WEBHOOK_SECRET, 'whsec_e8xKTyG00ObEUVhEI7waMxiinf7ylrWh'}
+    # Clerk Backend API key (for updating organizations in Clerk)
+    CLERK_SECRET_KEY: ${env:CLERK_SECRET_KEY, 'sk_test_JbLIXqTkc1hZIqMnLS9eIWQBBC4sStIrNGHsF6sQnY'}
   iam:
     role:
       statements:
@@ -66,6 +83,8 @@ provider:
             - !Sub "${UsersTable.Arn}/index/*"
             - !GetAtt WebhookEventsTable.Arn
             - !Sub "${WebhookEventsTable.Arn}/index/*"
+            - !GetAtt AuditLogsTable.Arn
+            - !Sub "${AuditLogsTable.Arn}/index/*"
         - Effect: Allow
           Action:
             - lambda:InvokeFunction
@@ -115,16 +134,22 @@ plugins:
 build:
   esbuild:
     bundle: true
-    minify: false
-    sourcemap: true
+    minify: true
+    sourcemap: false
     target: node24
     platform: node
+    external:
+      - '@aws-sdk/*'
 
 package:
   individually: true
 
 functions:
-  # Hello endpoint
+  # ===== Clerk JWT Authorizer =====
+  clerkAuthorizer:
+    handler: src/functions/shared/clerk-authorizer.handler
+
+  # Hello endpoint (public - no auth)
   hello:
     handler: src/functions/hello/handler.main
     events:
@@ -139,6 +164,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getClient:
     handler: src/functions/clients/handler.getClient
@@ -146,6 +173,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createClient:
     handler: src/functions/clients/handler.createClient
@@ -153,6 +182,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updateClient:
     handler: src/functions/clients/handler.updateClient
@@ -160,6 +191,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: PUT
+          authorizer:
+            name: clerkAuthorizer
 
   deleteClient:
     handler: src/functions/clients/handler.deleteClient
@@ -167,13 +200,19 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/clients/{id}
           method: DELETE
+          authorizer:
+            name: clerkAuthorizer
 
   bulkImportClients:
     handler: src/functions/clients/handler.bulkImportClients
+    memorySize: 512
+    timeout: 30
     events:
       - httpApi:
           path: /orgs/{orgId}/clients/bulk-import
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Credit Notes endpoints =====
   listCreditNotes:
@@ -183,6 +222,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getCreditNote:
     handler: src/functions/credit-notes/handler.getCreditNote
@@ -191,6 +232,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createCreditNote:
     handler: src/functions/credit-notes/handler.createCreditNote
@@ -199,6 +242,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updateCreditNote:
     handler: src/functions/credit-notes/handler.updateCreditNote
@@ -207,6 +252,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: PUT
+          authorizer:
+            name: clerkAuthorizer
 
   deleteCreditNote:
     handler: src/functions/credit-notes/handler.deleteCreditNote
@@ -215,6 +262,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}
           method: DELETE
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== DEBUG/TEST Endpoints for Credit Note Expiration =====
   checkExpirationManual:
@@ -224,6 +273,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}/manual-check-expiration
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   getExpirationRuleStatus:
     handler: src/functions/credit-notes/handler.getExpirationRuleStatus
@@ -232,6 +283,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/credit-notes/{id}/expiration-rule-status
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Credit Notes Expiration Handler =====
   processCreditNoteExpiration:
@@ -244,6 +297,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getPayment:
     handler: src/functions/payments/handler.getPayment
@@ -251,6 +306,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createPayment:
     handler: src/functions/payments/handler.createPayment
@@ -258,6 +315,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updatePayment:
     handler: src/functions/payments/handler.updatePayment
@@ -265,6 +324,8 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: PUT
+          authorizer:
+            name: clerkAuthorizer
 
   deletePayment:
     handler: src/functions/payments/handler.deletePayment
@@ -272,10 +333,14 @@ functions:
       - httpApi:
           path: /orgs/{orgId}/payments/{id}
           method: DELETE
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Credit Usage calculation =====
   calculateCreditUsageScheduled:
     handler: src/functions/credit-usage/handler.scheduleHandler
+    memorySize: 512
+    timeout: 60
     events:
       - schedule:
           rate: cron(0 0 * * ? *)
@@ -288,6 +353,8 @@ functions:
   # ===== Unified Metrics SQS Consumer =====
   calculateMetrics:
     handler: src/functions/credit-usage/metrics-handler.calculateMetrics
+    memorySize: 512
+    timeout: 30
     events:
       - sqs:
           arn: !GetAtt MetricsQueue.Arn
@@ -300,6 +367,8 @@ functions:
       - httpApi:
           path: /users/me/organizations
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   getOrganization:
     handler: src/functions/organizations/handler.getOrganization
@@ -307,6 +376,8 @@ functions:
       - httpApi:
           path: /organizations/{orgId}
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   createOrganization:
     handler: src/functions/organizations/handler.createOrganization
@@ -314,6 +385,8 @@ functions:
       - httpApi:
           path: /organizations
           method: POST
+          authorizer:
+            name: clerkAuthorizer
 
   updateOrganization:
     handler: src/functions/organizations/handler.updateOrganization
@@ -321,6 +394,8 @@ functions:
       - httpApi:
           path: /organizations/{orgId}
           method: PATCH
+          authorizer:
+            name: clerkAuthorizer
 
   listOrganizationMembers:
     handler: src/functions/organizations/handler.listOrganizationMembers
@@ -328,6 +403,27 @@ functions:
       - httpApi:
           path: /organizations/{orgId}/members
           method: GET
+          authorizer:
+            name: clerkAuthorizer
+
+  completeOrganizationOnboarding:
+    handler: src/functions/organizations/handler.completeOnboarding
+    events:
+      - httpApi:
+          path: /organizations/{orgId}/complete-onboarding
+          method: POST
+          authorizer:
+            name: clerkAuthorizer
+
+  # ===== Audit Logs endpoints =====
+  listAuditLogs:
+    handler: src/functions/audit-logs/handler.listAuditLogs
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/audit-logs
+          method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   # ===== Users endpoints =====
   getCurrentUser:
@@ -336,6 +432,8 @@ functions:
       - httpApi:
           path: /users/me
           method: GET
+          authorizer:
+            name: clerkAuthorizer
 
   updateCurrentUser:
     handler: src/functions/users/handler.updateCurrentUser
@@ -343,6 +441,8 @@ functions:
       - httpApi:
           path: /users/me
           method: PATCH
+          authorizer:
+            name: clerkAuthorizer
 
   getUser:
     handler: src/functions/users/handler.getUser
@@ -351,7 +451,7 @@ functions:
           path: /users/{userId}
           method: GET
 
-  # ===== Webhooks =====
+  # ===== Webhooks (public - no auth, uses Svix verification) =====
   clerkWebhook:
     handler: src/functions/webhooks/clerk/handler.main
     events:
@@ -558,6 +658,36 @@ resources:
           AttributeName: ttl
           Enabled: true
 
+    AuditLogsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_AUDIT_LOGS_BASE, 'audit-logs'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: orgId
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: gsi1pk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: orgId
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: byUser
+            KeySchema:
+              - AttributeName: gsi1pk
+                KeyType: HASH
+              - AttributeName: sk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
     # ===== SQS Queue for Metrics Calculations =====
     MetricsQueue:
       Type: AWS::SQS::Queue
@@ -673,6 +803,9 @@ resources:
           detail-type:
             - CreditNoteDeleted
             - CreditNotePaid
+            - PaymentCreated
+            - PaymentUpdated
+            - PaymentDeleted
         State: ENABLED
         Targets:
           - Arn: !GetAtt ClientDelinquencyCheckQueue.Arn

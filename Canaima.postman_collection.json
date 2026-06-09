@@ -855,6 +855,35 @@
             "description": "List all members of an organization"
           },
           "response": []
+        },
+        {
+          "name": "Complete Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corporation\",\n  \"teamSize\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{orgId}}/complete-onboarding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "organizations",
+                "{{orgId}}",
+                "complete-onboarding"
+              ]
+            },
+            "description": "Complete onboarding for an organization created via webhook. Updates the organization name in Clerk and sets onboardingCompleted to true in DynamoDB."
+          },
+          "response": []
         }
       ]
     },
@@ -953,14 +982,254 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Audit Logs",
+      "description": "Audit logging endpoints for tracking user actions",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "description": "Clerk JWT token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/audit-logs?page=1&limit=50&sortOrder=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (starts at 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Records per page (max: 100)"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc",
+                  "description": "Sort direction: asc (oldest first) or desc (newest first)"
+                },
+                {
+                  "key": "userId",
+                  "value": "",
+                  "description": "Filter by specific user ID",
+                  "disabled": true
+                },
+                {
+                  "key": "startDate",
+                  "value": "",
+                  "description": "Filter from date (YYYY-MM-DD or ISO 8601)",
+                  "disabled": true
+                },
+                {
+                  "key": "endDate",
+                  "value": "",
+                  "description": "Filter to date (YYYY-MM-DD or ISO 8601)",
+                  "disabled": true
+                },
+                {
+                  "key": "action",
+                  "value": "",
+                  "description": "Filter by action: CREATE, UPDATE, DELETE",
+                  "disabled": true
+                },
+                {
+                  "key": "resourceType",
+                  "value": "",
+                  "description": "Filter by resource type: client, credit-note, payment, organization",
+                  "disabled": true
+                },
+                {
+                  "key": "resourceId",
+                  "value": "",
+                  "description": "Filter by specific resource ID",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieve audit logs for an organization. Returns paginated list of all CREATE, UPDATE, DELETE operations performed by users."
+          },
+          "response": []
+        },
+        {
+          "name": "List Audit Logs by User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "description": "Clerk JWT token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/audit-logs?userId={{userId}}&page=1&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}",
+                  "description": "Filter by specific user ID"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Records per page"
+                }
+              ]
+            },
+            "description": "Retrieve audit logs filtered by a specific user"
+          },
+          "response": []
+        },
+        {
+          "name": "List Audit Logs by Date Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "description": "Clerk JWT token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/audit-logs?startDate=2026-06-01&endDate=2026-06-07&page=1&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-06-01",
+                  "description": "Filter from date (YYYY-MM-DD)"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-06-07",
+                  "description": "Filter to date (YYYY-MM-DD)"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Records per page"
+                }
+              ]
+            },
+            "description": "Retrieve audit logs within a specific date range"
+          },
+          "response": []
+        },
+        {
+          "name": "List Audit Logs by Action",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "description": "Clerk JWT token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orgs/{{orgId}}/audit-logs?action=DELETE&resourceType=client&page=1&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orgs",
+                "{{orgId}}",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "DELETE",
+                  "description": "Filter by action: CREATE, UPDATE, DELETE"
+                },
+                {
+                  "key": "resourceType",
+                  "value": "client",
+                  "description": "Filter by resource type"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Records per page"
+                }
+              ]
+            },
+            "description": "Retrieve audit logs filtered by action type and resource type"
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000",
+      "value": "https://api-dev.canaimacredito.com",
       "type": "string",
-      "description": "Base URL for the API (http://localhost:3000 for local development)"
+      "description": "Base URL for the API (https://api-dev.canaimacredito.com for dev environment)"
     },
     {
       "key": "userId",
@@ -991,6 +1260,12 @@
       "value": "770e8400-e29b-41d4-a716-446655660001",
       "type": "string",
       "description": "Payment UUID (from seeded data)"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string",
+      "description": "Clerk JWT Bearer token for authentication"
     }
   ]
 }

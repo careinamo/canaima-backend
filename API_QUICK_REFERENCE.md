@@ -21,6 +21,9 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 | **Client** | Cliente B2B con límite de crédito |
 | **CreditNote** | Nota de crédito/deuda del cliente |
 | **Payment** | Pago recibido contra una nota de crédito |
+| **Organization** | Organización/empresa multi-tenant |
+| **User** | Usuario del sistema (sync con Clerk) |
+| **AuditLog** | Registro de auditoría de cambios |
 
 ---
 
@@ -152,6 +155,162 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 ```json
 // Response 200
 { "success": true, "message": "Payment deleted" }
+```
+
+---
+
+### Clients Bulk Import `/orgs/{orgId}/clients/bulk-import`
+
+#### POST `/clients/bulk-import` - Importar clientes CSV
+**Content-Type:** `text/plain`
+**Max:** 50 filas
+```csv
+name,email,phone,address,active,delinquent,creditLimit,notes
+Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
+```
+```json
+// Response 202
+{
+  "summary": { "total": 2, "successful": 2, "failed": 0 },
+  "created": [{ "id": "", "name": "", "email": "" }],
+  "errors": []
+}
+// Con errores parciales
+{
+  "summary": { "total": 3, "successful": 2, "failed": 1 },
+  "created": [...],
+  "errors": [{ "row": 3, "data": {...}, "error": "email already exists" }]
+}
+```
+
+---
+
+### Organizations
+
+#### GET `/users/me/organizations` - Mis organizaciones
+**Query:** `?userId=user_abc123`
+```json
+// Response 200
+{ "data": [{ "orgId": "", "name": "", "role": "admin", "joinedAt": "" }] }
+```
+
+#### GET `/organizations/{orgId}` - Obtener organización
+```json
+// Response 200
+{ "data": { "clerkOrgId": "", "name": "", "slug": "", "teamSize": 10, "plan": "starter", "currency": "USD", "onboardingCompleted": true, "createdAt": "", "updatedAt": "" } }
+```
+
+#### POST `/organizations` - Crear organización
+```json
+// Request
+{ "clerkOrgId": "required", "name": "required", "teamSize": 10, "currency": "USD" }
+// Response 201
+{ "data": { "clerkOrgId": "", "name": "", "plan": "free", "onboardingCompleted": false, "createdAt": "" } }
+```
+
+#### PATCH `/organizations/{orgId}` - Actualizar organización
+```json
+// Request (todos opcionales)
+{ "name": "", "teamSize": 0, "currency": "", "plan": "free|starter|pro|enterprise", "settings": {} }
+// Response 200
+{ "data": { "clerkOrgId": "", "name": "", "updatedAt": "" } }
+```
+
+#### GET `/organizations/{orgId}/members` - Listar miembros
+```json
+// Response 200
+{ "data": [{ "userId": "", "role": "admin|member", "status": "active|invited", "email": "", "joinedAt": "" }] }
+```
+
+#### POST `/organizations/{orgId}/complete-onboarding` - Completar onboarding
+```json
+// Request
+{ "name": "required", "teamSize": "required >= 1" }
+// Response 200
+{ "data": { "clerkOrgId": "", "name": "", "teamSize": 15, "onboardingCompleted": true, "onboardingCompletedAt": "" }, "message": "Onboarding completed successfully" }
+```
+
+---
+
+### Users
+
+#### GET `/users/me` - Mi perfil
+**Query:** `?userId=user_abc123`
+```json
+// Response 200
+{ "data": { "clerkUserId": "", "email": "", "firstName": "", "lastName": "", "imageUrl": "", "createdAt": "", "updatedAt": "", "lastSignInAt": "" } }
+```
+
+#### PATCH `/users/me` - Actualizar mi perfil
+**Query:** `?userId=user_abc123`
+```json
+// Request (todos opcionales)
+{ "firstName": "", "lastName": "", "imageUrl": "https://..." }
+// Response 200
+{ "data": { "clerkUserId": "", "firstName": "", "lastName": "", "updatedAt": "" } }
+```
+
+#### GET `/users/{userId}` - Perfil público (sin auth)
+```json
+// Response 200 (solo campos públicos)
+{ "data": { "clerkUserId": "", "firstName": "", "lastName": "", "imageUrl": "" } }
+```
+
+---
+
+### Audit Logs `/orgs/{orgId}/audit-logs`
+
+#### GET `/audit-logs` - Listar logs de auditoría
+**Query:** `?userId=&startDate=2026-06-01&endDate=2026-06-07&action=CREATE|UPDATE|DELETE&resourceType=client|credit-note|payment|organization&resourceId=&page=1&limit=50&sortOrder=desc`
+```json
+// Response 200
+{
+  "data": [{ "orgId": "", "eventId": "", "userId": "", "userName": "John Doe", "userEmail": "john@example.com", "action": "CREATE", "resourceType": "client", "resourceId": "", "resourceName": "", "timestamp": "", "ipAddress": "", "metadata": {} }],
+  "pagination": { "page": 1, "limit": 50, "totalPages": 1, "totalCount": 1, "hasMore": false }
+}
+```
+
+---
+
+### Webhooks
+
+#### POST `/webhooks/clerk` - Webhook de Clerk (sin auth)
+> Verificación via Svix signature. Headers: `svix-id`, `svix-timestamp`, `svix-signature`
+
+**Eventos soportados:** `user.created`, `user.updated`, `user.deleted`, `organization.created`, `organization.updated`, `organization.deleted`, `organizationMembership.created`, `organizationMembership.updated`, `organizationMembership.deleted`
+```json
+// Response 200
+{ "message": "Event processed" }
+// Duplicado
+{ "message": "Event already processed" }
+```
+
+---
+
+### Health Check
+
+#### GET `/hello` - Health check (sin auth)
+```json
+// Response 200
+{ "message": "Hello from Canaima Backend!" }
+```
+
+---
+
+### Credit Notes Debug `/orgs/{orgId}/credit-notes/{id}`
+
+#### POST `/{id}/manual-check-expiration` - Test expiración manual
+```json
+// Response 200
+{ "success": true, "message": "Manual expiration check executed", "lambdaResponse": {...}, "statusCode": 200 }
+```
+
+#### GET `/{id}/expiration-rule-status` - Estado regla EventBridge
+```json
+// Response 200
+{ "success": true, "ruleName": "", "rule": { "Name": "", "State": "ENABLED", "ScheduleExpression": "" } }
+// Response 404
+{ "success": false, "message": "EventBridge rule not found", "ruleName": "" }
 ```
 
 ---

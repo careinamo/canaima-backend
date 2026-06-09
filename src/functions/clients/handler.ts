@@ -1,6 +1,8 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { ValidationError, validateCreateClient, validateUpdateClient, parseCsvClients } from './validators';
 import * as repo from './repository';
+import { requireOrgAccess } from '../shared/auth';
+import { logAuditEventSync } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -35,6 +37,10 @@ export const listClients = async (
   try {
     const orgId = event.pathParameters?.orgId;
     if (!orgId) return clientError(400, 'Missing orgId');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
 
     const q = event.queryStringParameters ?? {};
 
@@ -84,6 +90,10 @@ export const getClient = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing client id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     const client = await repo.getClientById(orgId, id);
     if (!client) return clientError(404, 'Client not found');
 
@@ -105,6 +115,10 @@ export const createClient = async (
     const orgId = event.pathParameters?.orgId;
     if (!orgId) return clientError(400, 'Missing orgId');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     let body: unknown;
     try {
       body = JSON.parse(event.body ?? '{}');
@@ -121,6 +135,15 @@ export const createClient = async (
     }
 
     const client = await repo.createClient(orgId, input);
+
+    // Log audit event (await to ensure it completes before Lambda freezes)
+    console.log('[CLIENTS] About to call logAuditEventSync for CREATE client:', client.id);
+    await logAuditEventSync(event, 'CREATE', 'client', client.id, client.name, {
+      email: client.email,
+      phone: client.phone,
+      creditLimit: client.creditLimit,
+    });
+
     return respond(201, client);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -141,6 +164,10 @@ export const updateClient = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing client id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     let body: unknown;
     try {
       body = JSON.parse(event.body ?? '{}');
@@ -160,6 +187,11 @@ export const updateClient = async (
 
     const client = await repo.updateClient(orgId, id, input);
     if (!client) return clientError(404, 'Client not found');
+
+    // Log audit event
+    await logAuditEventSync(event, 'UPDATE', 'client', client.id, client.name, {
+      updatedFields: Object.keys(input),
+    });
 
     return respond(200, client);
   } catch (e) {
@@ -182,8 +214,15 @@ export const deleteClient = async (
     if (!orgId) return clientError(400, 'Missing orgId');
     if (!id) return clientError(400, 'Missing client id');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     const deleted = await repo.deleteClient(orgId, id);
     if (!deleted) return clientError(404, 'Client not found');
+
+    // Log audit event
+    await logAuditEventSync(event, 'DELETE', 'client', id);
 
     return respond(200, { success: true, message: 'Client deleted' });
   } catch (error) {
@@ -203,6 +242,10 @@ export const bulkImportClients = async (
     const orgId = event.pathParameters?.orgId;
     if (!orgId) return clientError(400, 'Missing orgId');
 
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
     const csvContent = event.body ?? '';
     if (!csvContent.trim()) {
       return clientError(400, 'Request body (CSV content) is required');
@@ -221,6 +264,15 @@ export const bulkImportClients = async (
     // Create clients in batch
     const inputs = parseResult.valid.map(row => row.data);
     const result = await repo.createClientsBatch(orgId, inputs);
+
+    // Log audit event for bulk import
+    if (result.created.length > 0) {
+      await logAuditEventSync(event, 'CREATE', 'client', 'bulk-import', undefined, {
+        createdCount: result.created.length,
+        failedCount: result.errors.length,
+        clientIds: result.created.map(c => c.id),
+      });
+    }
 
     return respond(202, {
       summary: {
