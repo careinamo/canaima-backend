@@ -15,15 +15,15 @@ const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
 const METRICS_TABLE = process.env.TABLE_METRICS as string;
 
 /**
- * Update the delinquent clients count metric for an organization
+ * Update the monthly delinquent clients count metric for an organization
  * Queries all clients and counts how many are marked as delinquent
- * Also gathers additional context metrics
+ * Stores the metric with SK as YYYY-MM (monthly) and includes previousMonthValue
  */
 export async function updateDelinquentClientsMetrics(orgId: string, date: Date = new Date()): Promise<void> {
   try {
-    console.log(`Tumadre Updating delinquent clients metrics for org ${orgId} on date ${date.toISOString()}`);
-    // Format date as YYYY-MM-DD for the SK
-    const dateString = date.toISOString().split('T')[0]; // e.g., "2026-05-30"
+    // Format date as YYYY-MM for monthly SK
+    const yearMonth = date.toISOString().slice(0, 7); // e.g., "2026-06"
+    console.log(`Updating monthly delinquent clients metrics for org ${orgId}, month ${yearMonth}`);
 
     // Query all clients for this org
     const pk = `org#${orgId}`;
@@ -55,7 +55,7 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
     let totalCreditLimit = 0;
 
     for (const client of allClients) {
-      const isActive = (client.status as string) === 'active' || client.status === undefined;
+      const isActive = (client.active as boolean) !== false; // Default to active if not set
       const isDelinquent = (client.delinquent as boolean) === true;
 
       if (isActive) {
@@ -70,102 +70,70 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
       totalCreditLimit += Number(client.creditLimit ?? 0);
     }
 
-    // Check if value has changed since yesterday to decide if we need to copy
-    const yesterday = new Date(date);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayString = yesterday.toISOString().split('T')[0];
+    // Get previous month value
+    const previousMonth = new Date(date.getFullYear(), date.getMonth() - 1, 1);
+    const previousYearMonth = previousMonth.toISOString().slice(0, 7); // e.g., "2026-05"
 
-    const yesterdayMetricsKey = {
-      PK: `DelinquentClientsCount#${orgId}`,
-      SK: yesterdayString,
-    };
-
-    let yesterdayValue: number | undefined;
+    let previousMonthValue: number | null = null;
 
     try {
-      const yesterdayResult = await ddb.send(
+      const previousMonthResult = await ddb.send(
         new GetCommand({
           TableName: METRICS_TABLE,
-          Key: yesterdayMetricsKey,
+          Key: {
+            PK: `DelinquentClientsTotalMonth#${orgId}`,
+            SK: previousYearMonth,
+          },
         }),
       );
 
-      yesterdayValue = (yesterdayResult.Item?.value as number) || undefined;
+      if (previousMonthResult.Item) {
+        previousMonthValue = (previousMonthResult.Item.value as number) ?? null;
+      }
     } catch (e) {
-      // Yesterday's record doesn't exist, that's ok
+      // Previous month record doesn't exist, that's ok
+      console.log(`No previous month record found for ${previousYearMonth}`);
     }
 
-    // If value hasn't changed and yesterday exists, just copy yesterday's record to today
-    if (yesterdayValue !== undefined && yesterdayValue === delinquentCount) {
-      console.log(
-        `Delinquent clients count unchanged (${delinquentCount}). Copying yesterday's record.`,
-      );
+    // Update/create the monthly metrics record
+    console.log(`Delinquent clients count for ${yearMonth}: ${delinquentCount}, previousMonth: ${previousMonthValue}`);
 
-      const today = dateString;
-      const metricsKey = {
-        PK: `DelinquentClientsCount#${orgId}`,
-        SK: today,
-      };
+    const metricsKey = {
+      PK: `DelinquentClientsTotalMonth#${orgId}`,
+      SK: yearMonth,
+    };
 
-      await ddb.send(
-        new UpdateCommand({
-          TableName: METRICS_TABLE,
-          Key: metricsKey,
-          UpdateExpression:
-            'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #updatedAt = :updatedAt',
-          ExpressionAttributeNames: {
-            '#value': 'value',
-            '#activeClientsCount': 'activeClientsCount',
-            '#totalAccumulatedDebt': 'totalAccumulatedDebt',
-            '#totalCreditLimit': 'totalCreditLimit',
-            '#updatedAt': 'updatedAt',
-          },
-          ExpressionAttributeValues: {
-            ':value': delinquentCount,
-            ':activeClientsCount': activeClientsCount,
-            ':totalAccumulatedDebt': totalAccumulatedDebt,
-            ':totalCreditLimit': totalCreditLimit,
-            ':updatedAt': getCurrentTimestampInTimezone(),
-          },
-        }),
-      );
-    } else {
-      // Value has changed or it's the first day, create/update the record
-      console.log(`Delinquent clients count updated: ${delinquentCount}`);
+    await ddb.send(
+      new UpdateCommand({
+        TableName: METRICS_TABLE,
+        Key: metricsKey,
+        UpdateExpression:
+          'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #previousMonthValue = :previousMonthValue, #createdAt = if_not_exists(#createdAt, :createdAt), #updatedAt = :updatedAt, orgId = :orgId',
+        ExpressionAttributeNames: {
+          '#value': 'value',
+          '#activeClientsCount': 'activeClientsCount',
+          '#totalAccumulatedDebt': 'totalAccumulatedDebt',
+          '#totalCreditLimit': 'totalCreditLimit',
+          '#previousMonthValue': 'previousMonthValue',
+          '#createdAt': 'createdAt',
+          '#updatedAt': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':value': delinquentCount,
+          ':activeClientsCount': activeClientsCount,
+          ':totalAccumulatedDebt': totalAccumulatedDebt,
+          ':totalCreditLimit': totalCreditLimit,
+          ':previousMonthValue': previousMonthValue,
+          ':createdAt': getCurrentTimestampInTimezone(),
+          ':updatedAt': getCurrentTimestampInTimezone(),
+          ':orgId': orgId,
+        },
+      }),
+    );
 
-      const metricsKey = {
-        PK: `DelinquentClientsCount#${orgId}`,
-        SK: dateString,
-      };
-
-      await ddb.send(
-        new UpdateCommand({
-          TableName: METRICS_TABLE,
-          Key: metricsKey,
-          UpdateExpression:
-            'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #createdAt = if_not_exists(#createdAt, :createdAt), #updatedAt = :updatedAt, orgId = :orgId',
-          ExpressionAttributeNames: {
-            '#value': 'value',
-            '#activeClientsCount': 'activeClientsCount',
-            '#totalAccumulatedDebt': 'totalAccumulatedDebt',
-            '#totalCreditLimit': 'totalCreditLimit',
-            '#createdAt': 'createdAt',
-            '#updatedAt': 'updatedAt',
-          },
-          ExpressionAttributeValues: {
-            ':value': delinquentCount,
-            ':activeClientsCount': activeClientsCount,
-            ':totalAccumulatedDebt': totalAccumulatedDebt,
-            ':totalCreditLimit': totalCreditLimit,
-            ':createdAt': getCurrentTimestampInTimezone(),
-            ':updatedAt': getCurrentTimestampInTimezone(),
-            ':orgId': orgId,
-          },
-        }),
-      );
-    }
+    console.log(`Successfully updated monthly delinquent clients metrics for org ${orgId}`);
   } catch (error) {
-    console.error('Error updating delinquent clients metrics:', error);
+    console.error('Error updating monthly delinquent clients metrics:', error);
     // Don't throw - this is a non-critical operation
   }
 }
