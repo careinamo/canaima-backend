@@ -17,9 +17,9 @@ const METRICS_TABLE = process.env.TABLE_METRICS as string;
 console.log('[DelinquentMetrics] Module loaded. CLIENT_TABLE:', CLIENT_TABLE, 'METRICS_TABLE:', METRICS_TABLE);
 
 /**
- * Update the monthly delinquent clients count metric for an organization
+ * Update the daily delinquent clients count metric for an organization
  * Queries all clients and counts how many are marked as delinquent
- * Stores the metric with SK as YYYY-MM (monthly) and includes previousMonthValue
+ * Stores the metric with SK as YYYY-MM-DD (daily) and includes previousDayValue
  */
 export async function updateDelinquentClientsMetrics(orgId: string, date: Date = new Date()): Promise<void> {
   console.log(`[DelinquentMetrics] Function called for org ${orgId}`);
@@ -31,9 +31,9 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
   }
 
   try {
-    // Format date as YYYY-MM for monthly SK
-    const yearMonth = date.toISOString().slice(0, 7); // e.g., "2026-06"
-    console.log(`Updating monthly delinquent clients metrics for org ${orgId}, month ${yearMonth}`);
+    // Format date as YYYY-MM-DD for daily SK
+    const dateString = date.toISOString().slice(0, 10); // e.g., "2026-06-13"
+    console.log(`Updating daily delinquent clients metrics for org ${orgId}, date ${dateString}`);
 
     // Query all clients for this org
     const pk = `org#${orgId}`;
@@ -80,38 +80,39 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
       totalCreditLimit += Number(client.creditLimit ?? 0);
     }
 
-    // Get previous month value
-    const previousMonth = new Date(date.getFullYear(), date.getMonth() - 1, 1);
-    const previousYearMonth = previousMonth.toISOString().slice(0, 7); // e.g., "2026-05"
+    // Get previous day value
+    const previousDay = new Date(date);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousDateString = previousDay.toISOString().slice(0, 10); // e.g., "2026-06-12"
 
-    let previousMonthValue: number | null = null;
+    let previousDayValue: number | null = null;
 
     try {
-      const previousMonthResult = await ddb.send(
+      const previousDayResult = await ddb.send(
         new GetCommand({
           TableName: METRICS_TABLE,
           Key: {
-            PK: `DelinquentClientsTotalMonth#${orgId}`,
-            SK: previousYearMonth,
+            PK: `DelinquentClientsTotal#${orgId}`,
+            SK: previousDateString,
           },
         }),
       );
 
-      if (previousMonthResult.Item) {
-        previousMonthValue = (previousMonthResult.Item.value as number) ?? null;
+      if (previousDayResult.Item) {
+        previousDayValue = (previousDayResult.Item.value as number) ?? null;
       }
     } catch (e) {
-      // Previous month record doesn't exist, that's ok
-      console.log(`No previous month record found for ${previousYearMonth}`);
+      // Previous day record doesn't exist, that's ok
+      console.log(`No previous day record found for ${previousDateString}`);
     }
 
-    // Update/create the monthly metrics record
-    console.log(`[DelinquentMetrics] About to save: delinquentCount=${delinquentCount}, previousMonth=${previousMonthValue}`);
-    console.log(`[DelinquentMetrics] Saving to table: ${METRICS_TABLE}, PK: DelinquentClientsTotalMonth#${orgId}, SK: ${yearMonth}`);
+    // Update/create the daily metrics record
+    console.log(`[DelinquentMetrics] About to save: delinquentCount=${delinquentCount}, previousDay=${previousDayValue}`);
+    console.log(`[DelinquentMetrics] Saving to table: ${METRICS_TABLE}, PK: DelinquentClientsTotal#${orgId}, SK: ${dateString}`);
 
     const metricsKey = {
-      PK: `DelinquentClientsTotalMonth#${orgId}`,
-      SK: yearMonth,
+      PK: `DelinquentClientsTotal#${orgId}`,
+      SK: dateString,
     };
 
     await ddb.send(
@@ -119,13 +120,13 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
         TableName: METRICS_TABLE,
         Key: metricsKey,
         UpdateExpression:
-          'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #previousMonthValue = :previousMonthValue, #createdAt = if_not_exists(#createdAt, :createdAt), #updatedAt = :updatedAt, orgId = :orgId',
+          'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #previousDayValue = :previousDayValue, #createdAt = if_not_exists(#createdAt, :createdAt), #updatedAt = :updatedAt, orgId = :orgId',
         ExpressionAttributeNames: {
           '#value': 'value',
           '#activeClientsCount': 'activeClientsCount',
           '#totalAccumulatedDebt': 'totalAccumulatedDebt',
           '#totalCreditLimit': 'totalCreditLimit',
-          '#previousMonthValue': 'previousMonthValue',
+          '#previousDayValue': 'previousDayValue',
           '#createdAt': 'createdAt',
           '#updatedAt': 'updatedAt',
         },
@@ -134,7 +135,7 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
           ':activeClientsCount': activeClientsCount,
           ':totalAccumulatedDebt': totalAccumulatedDebt,
           ':totalCreditLimit': totalCreditLimit,
-          ':previousMonthValue': previousMonthValue,
+          ':previousDayValue': previousDayValue,
           ':createdAt': getCurrentTimestampInTimezone(),
           ':updatedAt': getCurrentTimestampInTimezone(),
           ':orgId': orgId,
@@ -142,9 +143,9 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
       }),
     );
 
-    console.log(`[DelinquentMetrics] Successfully updated monthly delinquent clients metrics for org ${orgId}`);
+    console.log(`[DelinquentMetrics] Successfully updated daily delinquent clients metrics for org ${orgId}`);
   } catch (error) {
-    console.error('[DelinquentMetrics] Error updating monthly delinquent clients metrics:', error);
+    console.error('[DelinquentMetrics] Error updating daily delinquent clients metrics:', error);
     console.error('[DelinquentMetrics] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     // Don't throw - this is a non-critical operation
   }
