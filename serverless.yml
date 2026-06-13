@@ -352,7 +352,7 @@ functions:
 
   # ===== Daily Metrics Processing (midnight) =====
   dailyMetricsScheduled:
-    handler: src/functions/credit-usage/daily-metrics-handler.dailyMetricsHandler
+    handler: src/functions/daily-metrics/handler.dailyMetricsHandler
     memorySize: 512
     timeout: 60
     events:
