@@ -350,6 +350,17 @@ functions:
   calculateCreditUsageEvent:
     handler: src/functions/credit-usage/handler.eventDrivenHandler
 
+  # ===== Daily Metrics Processing (midnight) =====
+  dailyMetricsScheduled:
+    handler: src/functions/credit-usage/daily-metrics-handler.dailyMetricsHandler
+    memorySize: 512
+    timeout: 60
+    events:
+      - schedule:
+          rate: cron(0 0 * * ? *)
+          input:
+            orgIds: ${env:ORG_IDS, 'org-default'}
+
   # ===== Unified Metrics SQS Consumer =====
   calculateMetrics:
     handler: src/functions/credit-usage/metrics-handler.calculateMetrics
