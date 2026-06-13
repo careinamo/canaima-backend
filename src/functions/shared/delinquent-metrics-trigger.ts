@@ -14,12 +14,22 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
 const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
 const METRICS_TABLE = process.env.TABLE_METRICS as string;
 
+console.log('[DelinquentMetrics] Module loaded. CLIENT_TABLE:', CLIENT_TABLE, 'METRICS_TABLE:', METRICS_TABLE);
+
 /**
  * Update the monthly delinquent clients count metric for an organization
  * Queries all clients and counts how many are marked as delinquent
  * Stores the metric with SK as YYYY-MM (monthly) and includes previousMonthValue
  */
 export async function updateDelinquentClientsMetrics(orgId: string, date: Date = new Date()): Promise<void> {
+  console.log(`[DelinquentMetrics] Function called for org ${orgId}`);
+  console.log(`[DelinquentMetrics] METRICS_TABLE value: "${METRICS_TABLE}"`);
+  
+  if (!METRICS_TABLE) {
+    console.error('[DelinquentMetrics] ERROR: METRICS_TABLE is not defined!');
+    return;
+  }
+
   try {
     // Format date as YYYY-MM for monthly SK
     const yearMonth = date.toISOString().slice(0, 7); // e.g., "2026-06"
@@ -96,7 +106,8 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
     }
 
     // Update/create the monthly metrics record
-    console.log(`Delinquent clients count for ${yearMonth}: ${delinquentCount}, previousMonth: ${previousMonthValue}`);
+    console.log(`[DelinquentMetrics] About to save: delinquentCount=${delinquentCount}, previousMonth=${previousMonthValue}`);
+    console.log(`[DelinquentMetrics] Saving to table: ${METRICS_TABLE}, PK: DelinquentClientsTotalMonth#${orgId}, SK: ${yearMonth}`);
 
     const metricsKey = {
       PK: `DelinquentClientsTotalMonth#${orgId}`,
@@ -131,9 +142,10 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
       }),
     );
 
-    console.log(`Successfully updated monthly delinquent clients metrics for org ${orgId}`);
+    console.log(`[DelinquentMetrics] Successfully updated monthly delinquent clients metrics for org ${orgId}`);
   } catch (error) {
-    console.error('Error updating monthly delinquent clients metrics:', error);
+    console.error('[DelinquentMetrics] Error updating monthly delinquent clients metrics:', error);
+    console.error('[DelinquentMetrics] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     // Don't throw - this is a non-critical operation
   }
 }
