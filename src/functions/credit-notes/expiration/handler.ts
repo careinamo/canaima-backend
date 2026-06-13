@@ -45,9 +45,11 @@ export async function processCreditNoteExpiration(
 
     // If client was marked as delinquent, update monthly delinquent clients metrics
     if (result.clientMarkedDelinquent) {
-      updateDelinquentClientsMetrics(orgId).catch(err =>
-        console.warn('Failed to update delinquent clients metrics:', err),
-      );
+      try {
+        await updateDelinquentClientsMetrics(orgId);
+      } catch (err) {
+        console.warn('Failed to update delinquent clients metrics:', err);
+      }
     }
 
     return {

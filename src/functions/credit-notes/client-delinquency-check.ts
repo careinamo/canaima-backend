@@ -161,9 +161,11 @@ export const checkClientDelinquency = async (event: SQSEvent): Promise<SQSBatchR
       }
 
       // Update delinquent clients metrics for the organization
-      updateDelinquentClientsMetrics(orgId).catch(err =>
-        console.warn('Failed to update delinquent clients metrics:', err),
-      );
+      try {
+        await updateDelinquentClientsMetrics(orgId);
+      } catch (err) {
+        console.warn('Failed to update delinquent clients metrics:', err);
+      }
 
       results.push({
         messageId: record.messageId,
