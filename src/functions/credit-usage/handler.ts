@@ -1,5 +1,6 @@
 import type { ScheduledEvent } from 'aws-lambda';
 import * as repo from './repository';
+import { copyDelinquentMetricsFromPreviousDay } from '../shared/delinquent-metrics-trigger';
 
 console.log('Credit Usage Lambda initialized');
 
@@ -56,18 +57,29 @@ export async function scheduleHandler(event: ScheduledEvent): Promise<{
     const orgIds = (event.detail as any)?.orgIds || (process.env.ORG_IDS?.split(',') ?? ['org-default']);
 
     const results = [];
+    const delinquentMetricsCopyResults = [];
+
     for (const orgId of orgIds) {
-      const result = await calculateCreditUsageForOrg(orgId.trim());
-      results.push({ orgId: orgId.trim(), result });
+      const trimmedOrgId = orgId.trim();
+      
+      // Calculate credit usage
+      const result = await calculateCreditUsageForOrg(trimmedOrgId);
+      results.push({ orgId: trimmedOrgId, result });
+
+      // Copy delinquent metrics from previous day if today's record doesn't exist
+      const copyResult = await copyDelinquentMetricsFromPreviousDay(trimmedOrgId);
+      delinquentMetricsCopyResults.push({ orgId: trimmedOrgId, ...copyResult });
     }
 
     console.log('Scheduled calculation complete:', JSON.stringify(results, null, 2));
+    console.log('Delinquent metrics copy results:', JSON.stringify(delinquentMetricsCopyResults, null, 2));
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         message: 'Credit usage calculated successfully for all organizations',
         results,
+        delinquentMetricsCopyResults,
       }),
     };
   } catch (error) {
