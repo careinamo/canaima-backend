@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { requireOrgAccess } from '../shared/auth';
-import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI } from './repository';
+import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI } from './repository';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -72,6 +72,7 @@ export const getDashboardMetrics = async (
     // Fetch KPIs from DynamoDB
     const creditNotesThisMonthKPI = await getCreditNotesThisMonthKPI(orgId, asOf);
     const collectedThisMonthKPI = await getCollectedThisMonthKPI(orgId, asOf);
+    const delinquentClientsKPI = await getDelinquentClientsKPI(orgId, asOf);
 
     const metrics = {
       as_of: asOf,
@@ -83,7 +84,7 @@ export const getDashboardMetrics = async (
       kpis: {
         credit_notes_this_month: creditNotesThisMonthKPI,
         collected_this_month: collectedThisMonthKPI,
-        delinquent_clients:   { value:     12, delta_abs:     3, delta_direction: "down", compare_to: "previous_month" },
+        delinquent_clients: delinquentClientsKPI,
         credit_utilization:   { value:   0.68, delta_pct:  -2.0, delta_direction: "up",   compare_to: "previous_month", unit: "ratio" }
       },
 

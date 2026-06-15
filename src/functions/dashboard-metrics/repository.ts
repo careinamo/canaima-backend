@@ -21,6 +21,22 @@ export function getPreviousMonth(yearMonth: string): string {
 }
 
 /**
+ * Get the same day from the previous month (YYYY-MM-DD format)
+ * If the day doesn't exist in the previous month, returns the last day of that month
+ */
+export function getSameDayPreviousMonth(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const prevDate = new Date(year, month - 2, day); // month - 2 because Date is 0-indexed
+  
+  // If day overflowed (e.g., March 31 -> Feb 31 becomes March 3), go to last day of prev month
+  if (prevDate.getMonth() !== (month - 2 + 12) % 12) {
+    prevDate.setDate(0); // Last day of previous month
+  }
+  
+  return `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Get year-month from a date string YYYY-MM-DD
  */
 export function getYearMonth(dateStr: string): string {
@@ -200,6 +216,47 @@ export async function getCollectedThisMonthKPI(
   return {
     value: currentValue,
     delta_pct: deltaPct,
+    delta_direction: deltaDirection,
+    compare_to: 'previous_month',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// KPI: Delinquent Clients
+// ---------------------------------------------------------------------------
+
+export interface DelinquentClientsKPI {
+  value: number;
+  delta_abs: number;
+  delta_direction: 'up' | 'down';
+  compare_to: string;
+}
+
+/**
+ * Get Delinquent Clients KPI
+ * Fetches the count of delinquent clients for the given date and calculates
+ * the simple delta compared to the same day of the previous month.
+ */
+export async function getDelinquentClientsKPI(
+  orgId: string,
+  asOf: string
+): Promise<DelinquentClientsKPI> {
+  const previousMonthDate = getSameDayPreviousMonth(asOf);
+
+  // Fetch current and previous month values in parallel
+  const [currentValue, previousValue] = await Promise.all([
+    getMetricValue('DelinquentClientsTotal', orgId, asOf),
+    getMetricValue('DelinquentClientsTotal', orgId, previousMonthDate),
+  ]);
+
+  // Simple delta: current - previous
+  const deltaAbs = Math.abs(currentValue - previousValue);
+  // down is good for delinquent clients (fewer is better)
+  const deltaDirection: 'up' | 'down' = currentValue <= previousValue ? 'down' : 'up';
+
+  return {
+    value: currentValue,
+    delta_abs: deltaAbs,
     delta_direction: deltaDirection,
     compare_to: 'previous_month',
   };
