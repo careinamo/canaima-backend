@@ -157,3 +157,50 @@ export async function getCreditNotesThisMonthKPI(
     compare_to: 'previous_month',
   };
 }
+
+// ---------------------------------------------------------------------------
+// KPI: Collected This Month (Payments)
+// ---------------------------------------------------------------------------
+
+export interface CollectedKPI {
+  value: number;
+  delta_pct: number;
+  delta_direction: 'up' | 'down';
+  compare_to: string;
+}
+
+/**
+ * Get Collected This Month KPI
+ * Fetches the total payments amount for the current month and calculates
+ * the projected delta compared to the previous month.
+ */
+export async function getCollectedThisMonthKPI(
+  orgId: string,
+  asOf: string
+): Promise<CollectedKPI> {
+  const currentMonth = getYearMonth(asOf);
+  const previousMonth = getPreviousMonth(currentMonth);
+  const dayOfMonth = getDayOfMonth(asOf);
+  const daysInMonth = getDaysInMonth(currentMonth);
+
+  // Fetch current and previous month values in parallel
+  const [currentValue, previousValue] = await Promise.all([
+    getMetricValue('PaymentsTotalMonth', orgId, currentMonth),
+    getMetricValue('PaymentsTotalMonth', orgId, previousMonth),
+  ]);
+
+  // Calculate projection and delta
+  const { deltaPct, deltaDirection } = calculateProjectionAndDelta(
+    currentValue,
+    previousValue,
+    dayOfMonth,
+    daysInMonth
+  );
+
+  return {
+    value: currentValue,
+    delta_pct: deltaPct,
+    delta_direction: deltaDirection,
+    compare_to: 'previous_month',
+  };
+}
