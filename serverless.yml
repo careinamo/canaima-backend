@@ -336,28 +336,18 @@ functions:
           authorizer:
             name: clerkAuthorizer
 
-  # ===== Credit Usage calculation =====
-  calculateCreditUsageScheduled:
-    handler: src/functions/credit-usage/handler.scheduleHandler
-    memorySize: 512
-    timeout: 60
-    events:
-      - schedule:
-          rate: cron(0 0 * * ? *)
-          input:
-            orgIds: ${env:ORG_IDS, 'org-default'}
-
+  # ===== Credit Usage event-driven calculation =====
   calculateCreditUsageEvent:
     handler: src/functions/credit-usage/handler.eventDrivenHandler
 
-  # ===== Daily Metrics Processing (midnight) =====
+  # ===== Daily Metrics Processing (midnight Venezuela = 4 AM UTC) =====
   dailyMetricsScheduled:
     handler: src/functions/daily-metrics/handler.dailyMetricsHandler
     memorySize: 512
     timeout: 60
     events:
       - schedule:
-          rate: cron(0 0 * * ? *)
+          rate: cron(0 4 * * ? *)
           input:
             orgIds: ${env:ORG_IDS, 'org-default'}
 
