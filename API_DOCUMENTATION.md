@@ -2179,7 +2179,7 @@ curl "http://localhost:3000/orgs/org-default/dashboard-metrics?as_of=2026-06-15"
     "generated_at": "2026-06-15T14:32:10Z",
 
     "kpis": {
-      "total_portfolio":      { "value": 245800, "delta_pct": 12.0, "delta_direction": "up", "compare_to": "previous_month" },
+      "credit_notes_this_month": { "value": 245800, "delta_pct": 12.0, "delta_direction": "up", "compare_to": "previous_month" },
       "collected_this_month": { "value": 38420, "delta_pct": 8.0, "delta_direction": "up", "compare_to": "previous_month" },
       "delinquent_clients":   { "value": 12, "delta_abs": 3, "delta_direction": "down", "compare_to": "previous_month" },
       "credit_utilization":   { "value": 0.68, "delta_pct": -2.0, "delta_direction": "up", "compare_to": "previous_month", "unit": "ratio" }
@@ -2243,7 +2243,7 @@ curl "http://localhost:3000/orgs/org-default/dashboard-metrics?as_of=2026-06-15"
 | (root) | `currency` | string | Currency code (from organization settings) |
 | (root) | `timezone` | string | Timezone for date calculations |
 | (root) | `generated_at` | string | ISO 8601 timestamp when metrics were generated |
-| `kpis.total_portfolio` | `value` | number | Total outstanding credit amount |
+| `kpis.credit_notes_this_month` | `value` | number | Total credit notes amount this month |
 | `kpis.collected_this_month` | `value` | number | Amount collected in current month |
 | `kpis.delinquent_clients` | `value` | number | Number of delinquent clients |
 | `kpis.credit_utilization` | `value` | number | Credit utilization ratio (0-1) |

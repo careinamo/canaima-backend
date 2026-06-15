@@ -287,7 +287,7 @@ Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
     "currency": "USD",
     "timezone": "America/Caracas",
     "generated_at": "2026-06-15T14:32:10Z",
-    "kpis": { "total_portfolio": {...}, "collected_this_month": {...}, "delinquent_clients": {...}, "credit_utilization": {...} },
+    "kpis": { "credit_notes_this_month": {...}, "collected_this_month": {...}, "delinquent_clients": {...}, "credit_utilization": {...} },
     "aging": { "buckets": [...] },
     "collections_vs_credits": { "granularity": "month", "series": [...] },
     "delinquency_trend": { "granularity": "month", "series": [...] },
