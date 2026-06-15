@@ -261,3 +261,46 @@ export async function getDelinquentClientsKPI(
     compare_to: 'previous_month',
   };
 }
+
+// ---------------------------------------------------------------------------
+// KPI: Credit Utilization
+// ---------------------------------------------------------------------------
+
+export interface CreditUtilizationKPI {
+  value: number;
+  delta_pct: number;
+  delta_direction: 'up' | 'down';
+  compare_to: string;
+  unit: string;
+}
+
+/**
+ * Get Credit Utilization KPI
+ * Fetches the credit utilization ratio for the given date and calculates
+ * the delta compared to the same day of the previous month.
+ */
+export async function getCreditUtilizationKPI(
+  orgId: string,
+  asOf: string
+): Promise<CreditUtilizationKPI> {
+  const previousMonthDate = getSameDayPreviousMonth(asOf);
+
+  // Fetch current and previous month values in parallel
+  const [currentValue, previousValue] = await Promise.all([
+    getMetricValue('CreditUsed', orgId, asOf),
+    getMetricValue('CreditUsed', orgId, previousMonthDate),
+  ]);
+
+  // Delta is the difference in percentage points (ratio * 100)
+  const deltaPct = Math.round((currentValue - previousValue) * 1000) / 10; // Round to 1 decimal
+  // down is good for credit utilization (lower utilization is better)
+  const deltaDirection: 'up' | 'down' = currentValue <= previousValue ? 'down' : 'up';
+
+  return {
+    value: currentValue,
+    delta_pct: Math.abs(deltaPct),
+    delta_direction: deltaDirection,
+    compare_to: 'previous_month',
+    unit: 'ratio',
+  };
+}
