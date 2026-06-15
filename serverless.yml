@@ -426,6 +426,16 @@ functions:
           authorizer:
             name: clerkAuthorizer
 
+  # ===== Dashboard Metrics endpoint =====
+  getDashboardMetrics:
+    handler: src/functions/dashboard-metrics/handler.getDashboardMetrics
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/dashboard-metrics
+          method: GET
+          authorizer:
+            name: clerkAuthorizer
+
   # ===== Users endpoints =====
   getCurrentUser:
     handler: src/functions/users/handler.getCurrentUser

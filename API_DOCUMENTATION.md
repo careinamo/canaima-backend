@@ -49,6 +49,8 @@ src/
 │   │   ├── repository.ts   # DynamoDB operations
 │   │   ├── types.ts        # TypeScript interfaces
 │   │   └── validators.ts   # Input validation
+│   ├── dashboard-metrics/  # Dashboard Metrics module
+│   │   └── handler.ts      # Aggregated metrics endpoint
 │   ├── webhooks/           # Webhook handlers
 │   │   └── clerk/          # Clerk webhook processor
 │   │       ├── handler.ts
@@ -2098,6 +2100,111 @@ curl "http://localhost:3000/orgs/org-default/audit-logs?startDate=2026-06-01&end
 **Error Responses:**
 
 - **400 Bad Request**: Invalid action or resourceType value
+
+---
+
+## Dashboard Metrics API Endpoints
+
+### Overview
+
+The Dashboard Metrics module provides aggregated metrics for building dashboards. All metrics are scoped by organization and calculated from DynamoDB tables.
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|--------------|
+| **GET** | `/orgs/{orgId}/dashboard-metrics` | `getDashboardMetrics` | Get aggregated dashboard metrics | 200, 400 |
+
+---
+
+### 1. GET /orgs/{orgId}/dashboard-metrics — Get Dashboard Metrics
+
+Retrieve aggregated metrics for the organization's dashboard.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/dashboard-metrics" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "orgId": "org-default",
+    "generatedAt": "2026-06-15T14:30:00.000Z",
+    "clients": {
+      "total": 0,
+      "active": 0,
+      "inactive": 0,
+      "delinquent": 0
+    },
+    "creditNotes": {
+      "total": 0,
+      "active": 0,
+      "paid": 0,
+      "expired": 0,
+      "cancelled": 0,
+      "totalAmount": 0,
+      "totalAmountPaid": 0,
+      "totalAmountPending": 0
+    },
+    "payments": {
+      "total": 0,
+      "totalAmount": 0,
+      "byMethod": {
+        "cash": 0,
+        "transfer": 0,
+        "card": 0,
+        "other": 0
+      }
+    },
+    "delinquency": {
+      "totalOverdue": 0,
+      "totalOverdueAmount": 0,
+      "averageDaysOverdue": 0
+    }
+  }
+}
+```
+
+**Metrics Fields:**
+
+| Section | Field | Type | Description |
+|---------|-------|------|-------------|
+| `clients` | `total` | number | Total number of clients |
+| `clients` | `active` | number | Clients with `active = true` |
+| `clients` | `inactive` | number | Clients with `active = false` |
+| `clients` | `delinquent` | number | Clients with `delinquent = true` |
+| `creditNotes` | `total` | number | Total credit notes |
+| `creditNotes` | `active` | number | Credit notes with status `pending` or `partial` |
+| `creditNotes` | `paid` | number | Credit notes with status `paid` |
+| `creditNotes` | `expired` | number | Credit notes with status `overdue` |
+| `creditNotes` | `cancelled` | number | Cancelled credit notes |
+| `creditNotes` | `totalAmount` | number | Sum of all credit note amounts |
+| `creditNotes` | `totalAmountPaid` | number | Sum of all `paid` amounts |
+| `creditNotes` | `totalAmountPending` | number | `totalAmount - totalAmountPaid` |
+| `payments` | `total` | number | Total number of payments |
+| `payments` | `totalAmount` | number | Sum of all payment amounts |
+| `payments.byMethod` | `cash` | number | Payments via cash |
+| `payments.byMethod` | `transfer` | number | Payments via bank transfer |
+| `payments.byMethod` | `card` | number | Payments via credit/debit card |
+| `payments.byMethod` | `other` | number | Payments via other methods |
+| `delinquency` | `totalOverdue` | number | Total overdue credit notes |
+| `delinquency` | `totalOverdueAmount` | number | Sum of overdue amounts |
+| `delinquency` | `averageDaysOverdue` | number | Average days past due date |
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing orgId
 
 ---
 

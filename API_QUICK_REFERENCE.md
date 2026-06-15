@@ -24,6 +24,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 | **Organization** | Organización/empresa multi-tenant |
 | **User** | Usuario del sistema (sync con Clerk) |
 | **AuditLog** | Registro de auditoría de cambios |
+| **DashboardMetrics** | Métricas agregadas para dashboard |
 
 ---
 
@@ -267,6 +268,26 @@ Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
 {
   "data": [{ "orgId": "", "eventId": "", "userId": "", "userName": "John Doe", "userEmail": "john@example.com", "action": "CREATE", "resourceType": "client", "resourceId": "", "resourceName": "", "timestamp": "", "ipAddress": "", "metadata": {} }],
   "pagination": { "page": 1, "limit": 50, "totalPages": 1, "totalCount": 1, "hasMore": false }
+}
+```
+
+---
+
+### Dashboard Metrics `/orgs/{orgId}/dashboard-metrics`
+
+#### GET `/dashboard-metrics` - Métricas del dashboard
+> Métricas agregadas para alimentar dashboards. Se irán agregando más métricas.
+```json
+// Response 200
+{
+  "data": {
+    "orgId": "",
+    "generatedAt": "2026-06-15T14:30:00.000Z",
+    "clients": { "total": 0, "active": 0, "inactive": 0, "delinquent": 0 },
+    "creditNotes": { "total": 0, "active": 0, "paid": 0, "expired": 0, "cancelled": 0, "totalAmount": 0, "totalAmountPaid": 0, "totalAmountPending": 0 },
+    "payments": { "total": 0, "totalAmount": 0, "byMethod": { "cash": 0, "transfer": 0, "card": 0, "other": 0 } },
+    "delinquency": { "totalOverdue": 0, "totalOverdueAmount": 0, "averageDaysOverdue": 0 }
+  }
 }
 ```
 
