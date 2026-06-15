@@ -9,6 +9,33 @@ Canaima Backend is a B2B credit and accounts-receivable serverless application b
 - **Storage**: AWS DynamoDB (single-table design)
 - **Deployment**: AWS Lambda + HTTP API Gateway
 
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Project Structure](#project-structure)
+3. [Configuration](#configuration)
+4. [Credit Limit Logic Overview](#credit-limit-logic-overview)
+5. **API Endpoints**
+   - [Clients API Endpoints](#clients-api-endpoints)
+   - [Credit Notes API Endpoints](#credit-notes-api-endpoints)
+   - [Credit Note Expiration & Client Delinquency Management](#credit-note-expiration--client-delinquency-management)
+   - [Payments API Endpoints](#payments-api-endpoints)
+   - [Organizations API Endpoints](#organizations-api-endpoints)
+   - [Users API Endpoints](#users-api-endpoints)
+   - [Audit Logs API Endpoints](#audit-logs-api-endpoints)
+   - [Dashboard Metrics API Endpoints](#dashboard-metrics-api-endpoints)
+   - [Webhooks API Endpoints](#webhooks-api-endpoints)
+   - [Health Check Endpoint](#health-check-endpoint)
+   - [Credit Notes Debug Endpoints](#credit-notes-debug-endpoints)
+6. **Database**
+   - [DynamoDB Table Schemas](#dynamodb-table-schemas)
+   - [Credit Notes DynamoDB Table Schema](#credit-notes-dynamodb-table-schema)
+7. [Development](#development)
+
+---
+
 ## Project Structure
 
 ```
@@ -2127,10 +2154,16 @@ Retrieve aggregated metrics for the organization's dashboard.
 |-----------|------|-------------|
 | `orgId` | string | Organization ID |
 
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `as_of` | string | Today | Reference date for metrics calculation (ISO 8601: `YYYY-MM-DD`) |
+
 **Example Request:**
 
 ```bash
-curl "http://localhost:3000/orgs/org-default/dashboard-metrics" \
+curl "http://localhost:3000/orgs/org-default/dashboard-metrics?as_of=2026-06-15" \
   -H "Authorization: Bearer <jwt>"
 ```
 
@@ -2139,38 +2172,63 @@ curl "http://localhost:3000/orgs/org-default/dashboard-metrics" \
 ```json
 {
   "data": {
-    "orgId": "org-default",
-    "generatedAt": "2026-06-15T14:30:00.000Z",
-    "clients": {
-      "total": 0,
-      "active": 0,
-      "inactive": 0,
-      "delinquent": 0
+    "as_of": "2026-06-15",
+    "range": "6m",
+    "currency": "USD",
+    "timezone": "America/Caracas",
+    "generated_at": "2026-06-15T14:32:10Z",
+
+    "kpis": {
+      "total_portfolio":      { "value": 245800, "delta_pct": 12.0, "delta_direction": "up", "compare_to": "previous_month" },
+      "collected_this_month": { "value": 38420, "delta_pct": 8.0, "delta_direction": "up", "compare_to": "previous_month" },
+      "delinquent_clients":   { "value": 12, "delta_abs": 3, "delta_direction": "down", "compare_to": "previous_month" },
+      "credit_utilization":   { "value": 0.68, "delta_pct": -2.0, "delta_direction": "up", "compare_to": "previous_month", "unit": "ratio" }
     },
-    "creditNotes": {
-      "total": 0,
-      "active": 0,
-      "paid": 0,
-      "expired": 0,
-      "cancelled": 0,
-      "totalAmount": 0,
-      "totalAmountPaid": 0,
-      "totalAmountPending": 0
+
+    "aging": {
+      "buckets": [
+        { "range": "0-30", "current": 85000, "overdue": 0 },
+        { "range": "31-60", "current": 24000, "overdue": 42000 },
+        { "range": "61-90", "current": 15500, "overdue": 28500 },
+        { "range": "90+", "current": 12000, "overdue": 18300 }
+      ]
     },
-    "payments": {
-      "total": 0,
-      "totalAmount": 0,
-      "byMethod": {
-        "cash": 0,
-        "transfer": 0,
-        "card": 0,
-        "other": 0
-      }
+
+    "collections_vs_credits": {
+      "granularity": "month",
+      "series": [
+        { "period": "2026-01", "label": "Ene", "credits": 32000, "collections": 28000 },
+        { "period": "2026-06", "label": "Jun", "credits": 41000, "collections": 38420 }
+      ]
     },
-    "delinquency": {
-      "totalOverdue": 0,
-      "totalOverdueAmount": 0,
-      "averageDaysOverdue": 0
+
+    "delinquency_trend": {
+      "granularity": "month",
+      "series": [
+        { "period": "2026-01", "label": "Ene", "overdue": 22000 },
+        { "period": "2026-06", "label": "Jun", "overdue": 32800 }
+      ]
+    },
+
+    "client_distribution": {
+      "total": 61800,
+      "items": [
+        { "client_id": "cli_01", "name": "Comercial El Rey", "value": 18500, "percent": 0.299 },
+        { "client_id": null, "name": "Otros", "value": 15900, "percent": 0.257, "is_aggregate": true }
+      ]
+    },
+
+    "top_delinquents": {
+      "items": [
+        {
+          "client_id": "cli_07",
+          "name": "Comercial El Rey",
+          "overdue_amount": 12450,
+          "days_overdue": 45,
+          "invoices_count": 3,
+          "status": "delinquent"
+        }
+      ]
     }
   }
 }
@@ -2180,31 +2238,35 @@ curl "http://localhost:3000/orgs/org-default/dashboard-metrics" \
 
 | Section | Field | Type | Description |
 |---------|-------|------|-------------|
-| `clients` | `total` | number | Total number of clients |
-| `clients` | `active` | number | Clients with `active = true` |
-| `clients` | `inactive` | number | Clients with `active = false` |
-| `clients` | `delinquent` | number | Clients with `delinquent = true` |
-| `creditNotes` | `total` | number | Total credit notes |
-| `creditNotes` | `active` | number | Credit notes with status `pending` or `partial` |
-| `creditNotes` | `paid` | number | Credit notes with status `paid` |
-| `creditNotes` | `expired` | number | Credit notes with status `overdue` |
-| `creditNotes` | `cancelled` | number | Cancelled credit notes |
-| `creditNotes` | `totalAmount` | number | Sum of all credit note amounts |
-| `creditNotes` | `totalAmountPaid` | number | Sum of all `paid` amounts |
-| `creditNotes` | `totalAmountPending` | number | `totalAmount - totalAmountPaid` |
-| `payments` | `total` | number | Total number of payments |
-| `payments` | `totalAmount` | number | Sum of all payment amounts |
-| `payments.byMethod` | `cash` | number | Payments via cash |
-| `payments.byMethod` | `transfer` | number | Payments via bank transfer |
-| `payments.byMethod` | `card` | number | Payments via credit/debit card |
-| `payments.byMethod` | `other` | number | Payments via other methods |
-| `delinquency` | `totalOverdue` | number | Total overdue credit notes |
-| `delinquency` | `totalOverdueAmount` | number | Sum of overdue amounts |
-| `delinquency` | `averageDaysOverdue` | number | Average days past due date |
+| (root) | `as_of` | string | Reference date for metrics (YYYY-MM-DD) |
+| (root) | `range` | string | Time range for historical data |
+| (root) | `currency` | string | Currency code (from organization settings) |
+| (root) | `timezone` | string | Timezone for date calculations |
+| (root) | `generated_at` | string | ISO 8601 timestamp when metrics were generated |
+| `kpis.total_portfolio` | `value` | number | Total outstanding credit amount |
+| `kpis.collected_this_month` | `value` | number | Amount collected in current month |
+| `kpis.delinquent_clients` | `value` | number | Number of delinquent clients |
+| `kpis.credit_utilization` | `value` | number | Credit utilization ratio (0-1) |
+| `kpis.*` | `delta_pct` | number | Percentage change vs comparison period |
+| `kpis.*` | `delta_direction` | string | `up` or `down` |
+| `aging.buckets` | `range` | string | Days range (0-30, 31-60, 61-90, 90+) |
+| `aging.buckets` | `current` | number | Current (not overdue) amount in bucket |
+| `aging.buckets` | `overdue` | number | Overdue amount in bucket |
+| `collections_vs_credits.series` | `period` | string | Month (YYYY-MM) |
+| `collections_vs_credits.series` | `credits` | number | Credit notes created in period |
+| `collections_vs_credits.series` | `collections` | number | Payments collected in period |
+| `delinquency_trend.series` | `overdue` | number | Total overdue amount at end of period |
+| `client_distribution.items` | `client_id` | string | Client UUID (null for "Others" aggregate) |
+| `client_distribution.items` | `value` | number | Outstanding amount for client |
+| `client_distribution.items` | `percent` | number | Percentage of total portfolio |
+| `top_delinquents.items` | `overdue_amount` | number | Total overdue amount |
+| `top_delinquents.items` | `days_overdue` | number | Max days past due |
+| `top_delinquents.items` | `invoices_count` | number | Number of overdue invoices |
 
 **Error Responses:**
 
 - **400 Bad Request**: Missing orgId
+- **400 Bad Request**: Invalid as_of date format (expected YYYY-MM-DD)
 
 ---
 

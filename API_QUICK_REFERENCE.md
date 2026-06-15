@@ -276,17 +276,23 @@ Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
 ### Dashboard Metrics `/orgs/{orgId}/dashboard-metrics`
 
 #### GET `/dashboard-metrics` - Métricas del dashboard
-> Métricas agregadas para alimentar dashboards. Se irán agregando más métricas.
+**Query:** `?as_of=2026-06-15`
+> Métricas agregadas para alimentar dashboards. `as_of` es opcional (default: hoy).
 ```json
 // Response 200
 {
   "data": {
-    "orgId": "",
-    "generatedAt": "2026-06-15T14:30:00.000Z",
-    "clients": { "total": 0, "active": 0, "inactive": 0, "delinquent": 0 },
-    "creditNotes": { "total": 0, "active": 0, "paid": 0, "expired": 0, "cancelled": 0, "totalAmount": 0, "totalAmountPaid": 0, "totalAmountPending": 0 },
-    "payments": { "total": 0, "totalAmount": 0, "byMethod": { "cash": 0, "transfer": 0, "card": 0, "other": 0 } },
-    "delinquency": { "totalOverdue": 0, "totalOverdueAmount": 0, "averageDaysOverdue": 0 }
+    "as_of": "2026-06-15",
+    "range": "6m",
+    "currency": "USD",
+    "timezone": "America/Caracas",
+    "generated_at": "2026-06-15T14:32:10Z",
+    "kpis": { "total_portfolio": {...}, "collected_this_month": {...}, "delinquent_clients": {...}, "credit_utilization": {...} },
+    "aging": { "buckets": [...] },
+    "collections_vs_credits": { "granularity": "month", "series": [...] },
+    "delinquency_trend": { "granularity": "month", "series": [...] },
+    "client_distribution": { "total": 0, "items": [...] },
+    "top_delinquents": { "items": [...] }
   }
 }
 ```

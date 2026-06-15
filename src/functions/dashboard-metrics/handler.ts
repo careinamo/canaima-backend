@@ -22,8 +22,21 @@ const clientError = (statusCode: number, message: string) =>
 const serverError = () => respond(500, { error: 'Internal server error' });
 
 // ---------------------------------------------------------------------------
-// GET /orgs/{orgId}/dashboard-metrics
+// GET /orgs/{orgId}/dashboard-metrics?as_of=YYYY-MM-DD
 // ---------------------------------------------------------------------------
+
+// Validate date format YYYY-MM-DD
+const isValidDateFormat = (dateStr: string): boolean => {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateStr)) return false;
+  const date = new Date(dateStr);
+  return !isNaN(date.getTime());
+};
+
+// Get today's date in YYYY-MM-DD format
+const getTodayDate = (): string => {
+  return new Date().toISOString().split('T')[0];
+};
 
 export const getDashboardMetrics = async (
   event: APIGatewayProxyEventV2,
@@ -36,11 +49,27 @@ export const getDashboardMetrics = async (
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
 
+    // Parse query parameters
+    const queryParams = event.queryStringParameters ?? {};
+    const asOfParam = queryParams.as_of;
+
+    // Validate as_of parameter if provided
+    let asOf: string;
+    if (asOfParam) {
+      if (!isValidDateFormat(asOfParam)) {
+        return clientError(400, 'Invalid as_of date format. Expected YYYY-MM-DD');
+      }
+      asOf = asOfParam;
+    } else {
+      // Default to today if not provided
+      asOf = getTodayDate();
+    }
+
     // TODO: Aquí se agregarán las queries a DynamoDB para obtener las métricas reales
     // Por ahora retornamos datos de ejemplo con la estructura final
 
     const metrics = {
-      as_of: "2026-06-15",
+      as_of: asOf,
       range: "6m",
       currency: "USD",
       timezone: "America/Caracas",
