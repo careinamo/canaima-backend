@@ -6,6 +6,7 @@ import {
   TransactWriteCommand,
   UpdateCommand,
   QueryCommand,
+  BatchGetCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { Payment, PaymentRecord, CreatePaymentInput, UpdatePaymentInput, ListPaymentsParams } from './types';
 import * as clientRepo from '../clients/repository';
@@ -75,7 +76,24 @@ export async function getPaymentById(orgId: string, paymentId: string): Promise<
       Key: { PK: `org#${orgId}`, SK: `payment#${paymentId}` },
     }),
   );
-  return result.Item ? toPayment(result.Item) : null;
+  if (!result.Item) return null;
+  
+  const payment = toPayment(result.Item);
+  
+  // Enrich with creditNoteNumber if missing (for payments created before this field existed)
+  if (!payment.creditNoteNumber && payment.creditNoteId) {
+    const creditNoteResult = await ddb.send(
+      new GetCommand({
+        TableName: CREDIT_NOTES_TABLE,
+        Key: { PK: `org#${orgId}`, SK: `creditnote#${payment.creditNoteId}` },
+      }),
+    );
+    if (creditNoteResult.Item) {
+      payment.creditNoteNumber = creditNoteResult.Item.number as string;
+    }
+  }
+  
+  return payment;
 }
 
 export async function listPayments(params: ListPaymentsParams): Promise<{ items: Payment[]; total: number }> {
@@ -132,6 +150,41 @@ export async function listPayments(params: ListPaymentsParams): Promise<{ items:
     }
     lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (lastKey);
+
+  // Enrich payments missing creditNoteNumber (for payments created before this field existed)
+  const paymentsNeedingEnrichment = allItems.filter(p => !p.creditNoteNumber && p.creditNoteId);
+  if (paymentsNeedingEnrichment.length > 0) {
+    // Get unique credit note IDs
+    const creditNoteIds = [...new Set(paymentsNeedingEnrichment.map(p => p.creditNoteId))];
+    
+    // Batch get credit notes (max 100 per batch)
+    const creditNoteMap = new Map<string, string>();
+    for (let i = 0; i < creditNoteIds.length; i += 100) {
+      const batch = creditNoteIds.slice(i, i + 100);
+      const keys = batch.map(id => ({ PK: `org#${params.orgId}`, SK: `creditnote#${id}` }));
+      
+      const batchResult = await ddb.send(new BatchGetCommand({
+        RequestItems: {
+          [CREDIT_NOTES_TABLE]: { Keys: keys },
+        },
+      }));
+      
+      for (const item of batchResult.Responses?.[CREDIT_NOTES_TABLE] ?? []) {
+        const noteId = (item.SK as string).replace('creditnote#', '');
+        creditNoteMap.set(noteId, item.number as string);
+      }
+    }
+    
+    // Apply creditNoteNumber to payments
+    for (const payment of allItems) {
+      if (!payment.creditNoteNumber && payment.creditNoteId) {
+        const creditNoteNumber = creditNoteMap.get(payment.creditNoteId);
+        if (creditNoteNumber) {
+          payment.creditNoteNumber = creditNoteNumber;
+        }
+      }
+    }
+  }
 
   // In-memory sort
   const field = params.sortBy as keyof Payment;
