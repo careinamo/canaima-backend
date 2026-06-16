@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { requireOrgAccess } from '../shared/auth';
-import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets, getCollectionsVsCredits, getTopDelinquents } from './repository';
+import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets, getCollectionsVsCredits, getTopDelinquents, getClientDistribution } from './repository';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -77,6 +77,7 @@ export const getDashboardMetrics = async (
     const agingData = await getAgingBuckets(orgId, asOf);
     const collectionsVsCreditsData = await getCollectionsVsCredits(orgId, asOf);
     const topDelinquentsData = await getTopDelinquents(orgId, asOf);
+    const clientDistributionData = await getClientDistribution(orgId);
 
     const metrics = {
       as_of: asOf,
@@ -108,16 +109,7 @@ export const getDashboardMetrics = async (
         ]
       },
 
-      client_distribution: {
-        total: 61800,
-        items: [
-          { client_id: "cli_01", name: "Comercial El Rey",     value: 18500, percent: 0.299 },
-          { client_id: "cli_02", name: "Distribuidora López",  value: 12300, percent: 0.199 },
-          { client_id: "cli_03", name: "Inversiones Torres",   value:  8900, percent: 0.144 },
-          { client_id: "cli_04", name: "Supermercado Central", value:  6200, percent: 0.100 },
-          { client_id: null,     name: "Otros",                value: 15900, percent: 0.257, is_aggregate: true }
-        ]
-      },
+      client_distribution: clientDistributionData,
 
       top_delinquents: topDelinquentsData
     };

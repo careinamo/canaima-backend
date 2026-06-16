@@ -660,3 +660,114 @@ export async function getTopDelinquents(
     items: sortedClients,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Client Distribution
+// ---------------------------------------------------------------------------
+
+export interface ClientDistributionItem {
+  client_id: string | null;
+  name: string;
+  value: number;
+  percent: number;
+  is_aggregate?: boolean;
+}
+
+export interface ClientDistributionData {
+  total: number;
+  items: ClientDistributionItem[];
+}
+
+/**
+ * Get client distribution based on accumulated debt
+ * Returns top 4 clients by debt and groups the rest as "Otros"
+ */
+export async function getClientDistribution(
+  orgId: string
+): Promise<ClientDistributionData> {
+  // Query all clients for the organization
+  let allClients: Array<{
+    id: string;
+    name: string;
+    accumulatedDebt: number;
+  }> = [];
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+  do {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_CLIENTS,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+        ExpressionAttributeValues: {
+          ':pk': `org#${orgId}`,
+          ':skPrefix': 'client#',
+        },
+        ProjectionExpression: 'id, #name, accumulatedDebt',
+        ExpressionAttributeNames: {
+          '#name': 'name',
+        },
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+
+    if (result.Items) {
+      allClients = allClients.concat(
+        result.Items as Array<{
+          id: string;
+          name: string;
+          accumulatedDebt: number;
+        }>
+      );
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  // Filter clients with debt > 0
+  const clientsWithDebt = allClients
+    .filter(client => (client.accumulatedDebt || 0) > 0)
+    .map(client => ({
+      client_id: client.id,
+      name: client.name,
+      value: client.accumulatedDebt || 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  // Calculate total debt
+  const total = clientsWithDebt.reduce((sum, client) => sum + client.value, 0);
+
+  if (total === 0) {
+    return {
+      total: 0,
+      items: [],
+    };
+  }
+
+  // Get top 4 clients
+  const top4 = clientsWithDebt.slice(0, 4).map(client => ({
+    client_id: client.client_id,
+    name: client.name,
+    value: client.value,
+    percent: Math.round((client.value / total) * 1000) / 1000,
+  }));
+
+  // Group the rest as "Otros"
+  const others = clientsWithDebt.slice(4);
+  const othersTotal = others.reduce((sum, client) => sum + client.value, 0);
+
+  const items: ClientDistributionItem[] = [...top4];
+
+  if (othersTotal > 0) {
+    items.push({
+      client_id: null,
+      name: 'Otros',
+      value: othersTotal,
+      percent: Math.round((othersTotal / total) * 1000) / 1000,
+      is_aggregate: true,
+    });
+  }
+
+  return {
+    total,
+    items,
+  };
+}
