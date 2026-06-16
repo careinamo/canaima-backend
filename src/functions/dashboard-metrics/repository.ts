@@ -338,8 +338,8 @@ function getDateDaysAgo(asOf: string, days: number): Date {
  * - 90+: created more than 90 days ago
  * 
  * For each bucket:
- * - current: total amount of credit notes created in that period
- * - overdue: total pending amount (amount - paid) of overdue credit notes in that period
+ * - current: pending amount (amount - paid) of active/vigent credit notes (not overdue)
+ * - overdue: pending amount (amount - paid) of overdue credit notes
  */
 export async function getAgingBuckets(
   orgId: string,
@@ -396,8 +396,9 @@ export async function getAgingBuckets(
     const paid = note.paid || 0;
     const pendingAmount = amount - paid;
 
-    // Skip notes created after asOf date
+    // Skip notes created after asOf date or with no pending amount
     if (createdAt > asOfDate) continue;
+    if (pendingAmount <= 0) continue;
 
     // Determine which bucket this note belongs to
     let bucketKey: string;
@@ -411,12 +412,13 @@ export async function getAgingBuckets(
       bucketKey = '90+';
     }
 
-    // Add to current total
-    buckets[bucketKey].current += amount;
-
-    // Add to overdue if status is overdue
-    if (note.status === 'overdue' && pendingAmount > 0) {
+    // Categorize by status
+    if (note.status === 'overdue') {
+      // Add to overdue (notes that are past due date)
       buckets[bucketKey].overdue += pendingAmount;
+    } else {
+      // Add to current (active/vigent notes that are not overdue)
+      buckets[bucketKey].current += pendingAmount;
     }
   }
 
