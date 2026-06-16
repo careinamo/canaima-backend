@@ -2,6 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import { ValidationError, validateCreateCreditNote, validateUpdateCreditNote } from './validators';
 import * as repo from './repository';
 import { CreditLimitExceededError } from './repository';
+import * as paymentsRepo from '../payments/repository';
 import type { CreditNote, CreditNoteStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 import { publishCrudEvent } from '../shared/crud-trigger';
@@ -278,6 +279,24 @@ export const deleteCreditNote = async (
     // Get the credit note first to capture clientId for the event
     const creditNote = await repo.getCreditNoteById(orgId, id);
     if (!creditNote) return clientError(404, 'Credit note not found');
+
+    // Check if credit note has associated payments
+    const { items: associatedPayments } = await paymentsRepo.listPayments({
+      orgId,
+      creditNoteId: id,
+      page: 1,
+      limit: 1,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    if (associatedPayments.length > 0) {
+      return respond(409, {
+        error: 'Cannot delete credit note with associated payments',
+        code: 'HAS_ASSOCIATED_PAYMENTS',
+        message: 'Esta nota de crédito tiene pagos asociados. Debe eliminar los pagos primero antes de eliminar la nota de crédito.',
+      });
+    }
 
     const clientId = (creditNote as any).clientId;
 
