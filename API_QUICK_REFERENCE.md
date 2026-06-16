@@ -111,6 +111,8 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 ```json
 // Response 200
 { "success": true, "message": "Credit note deleted" }
+// Error 409 - Tiene pagos asociados
+{ "error": "Cannot delete credit note with associated payments", "code": "HAS_ASSOCIATED_PAYMENTS", "message": "Esta nota de crédito tiene pagos asociados. Debe eliminar los pagos primero antes de eliminar la nota de crédito." }
 ```
 > ⚡ **Side effect:** Recalcula `client.delinquent` automáticamente
 

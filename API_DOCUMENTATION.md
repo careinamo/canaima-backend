@@ -1093,6 +1093,17 @@ curl -X DELETE http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b
 **Error Responses:**
 
 - **404 Not Found**: Credit note with the given ID does not exist
+- **409 Conflict**: Credit note has associated payments that must be deleted first
+
+**Error Response (409 Conflict - Has Associated Payments):**
+
+```json
+{
+  "error": "Cannot delete credit note with associated payments",
+  "code": "HAS_ASSOCIATED_PAYMENTS",
+  "message": "Esta nota de crédito tiene pagos asociados. Debe eliminar los pagos primero antes de eliminar la nota de crédito."
+}
+```
 
 ---
 
