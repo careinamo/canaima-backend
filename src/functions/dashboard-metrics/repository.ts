@@ -431,3 +431,75 @@ export async function getAgingBuckets(
     ],
   };
 }
+
+// ---------------------------------------------------------------------------
+// Collections vs Credits (6-month trend)
+// ---------------------------------------------------------------------------
+
+const MONTH_LABELS: Record<string, string> = {
+  '01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr',
+  '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Ago',
+  '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic',
+};
+
+export interface CollectionsVsCreditsItem {
+  period: string;
+  label: string;
+  credits: number;
+  collections: number;
+}
+
+export interface CollectionsVsCreditsData {
+  granularity: string;
+  series: CollectionsVsCreditsItem[];
+}
+
+/**
+ * Get the last N months as YYYY-MM strings (including current month)
+ */
+function getLastNMonths(asOf: string, count: number): string[] {
+  const months: string[] = [];
+  const [year, month] = asOf.substring(0, 7).split('-').map(Number);
+  
+  for (let i = 0; i < count; i++) {
+    const date = new Date(year, month - 1 - i, 1);
+    const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    months.unshift(ym); // Add to beginning to maintain chronological order
+  }
+  
+  return months;
+}
+
+/**
+ * Get Collections vs Credits trend for the last 6 months
+ * Fetches monthly totals for credit notes and payments
+ */
+export async function getCollectionsVsCredits(
+  orgId: string,
+  asOf: string
+): Promise<CollectionsVsCreditsData> {
+  const months = getLastNMonths(asOf, 6);
+
+  // Fetch all months data in parallel
+  const results = await Promise.all(
+    months.map(async (month) => {
+      const [credits, collections] = await Promise.all([
+        getMetricValue('CreditNotesTotalMonth', orgId, month),
+        getMetricValue('PaymentsTotalMonth', orgId, month),
+      ]);
+      
+      const monthNum = month.split('-')[1];
+      return {
+        period: month,
+        label: MONTH_LABELS[monthNum] || monthNum,
+        credits,
+        collections,
+      };
+    })
+  );
+
+  return {
+    granularity: 'month',
+    series: results,
+  };
+}

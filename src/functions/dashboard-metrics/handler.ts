@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { requireOrgAccess } from '../shared/auth';
-import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets } from './repository';
+import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets, getCollectionsVsCredits } from './repository';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -75,6 +75,7 @@ export const getDashboardMetrics = async (
     const delinquentClientsKPI = await getDelinquentClientsKPI(orgId, asOf);
     const creditUtilizationKPI = await getCreditUtilizationKPI(orgId, asOf);
     const agingData = await getAgingBuckets(orgId, asOf);
+    const collectionsVsCreditsData = await getCollectionsVsCredits(orgId, asOf);
 
     const metrics = {
       as_of: asOf,
@@ -92,17 +93,7 @@ export const getDashboardMetrics = async (
 
       aging: agingData,
 
-      collections_vs_credits: {
-        granularity: "month",
-        series: [
-          { period: "2026-01", label: "Ene", credits: 32000, collections: 28000 },
-          { period: "2026-02", label: "Feb", credits: 28000, collections: 31000 },
-          { period: "2026-03", label: "Mar", credits: 45000, collections: 35000 },
-          { period: "2026-04", label: "Abr", credits: 38000, collections: 40000 },
-          { period: "2026-05", label: "May", credits: 52000, collections: 42000 },
-          { period: "2026-06", label: "Jun", credits: 41000, collections: 38420 }
-        ]
-      },
+      collections_vs_credits: collectionsVsCreditsData,
 
       delinquency_trend: {
         granularity: "month",
