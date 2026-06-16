@@ -1,8 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 
 const TABLE_METRICS = process.env.TABLE_METRICS as string;
 const TABLE_CREDIT_NOTES = process.env.TABLE_CREDIT_NOTES as string;
+const TABLE_CLIENTS = process.env.TABLE_CLIENTS as string;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -522,8 +523,8 @@ export interface TopDelinquentsData {
 }
 
 /**
- * Get top delinquent clients ordered by overdue amount (highest first)
- * Groups overdue credit notes by client and calculates totals
+ * Get top delinquent clients ordered by total accumulated debt (highest first)
+ * Uses accumulated debt from clients table, days_overdue from oldest overdue note
  */
 export async function getTopDelinquents(
   orgId: string,
@@ -608,12 +609,46 @@ export async function getTopDelinquents(
     }
   }
 
-  // Convert to array and sort by overdue_amount descending
+  // Get client IDs to fetch accumulated debt
+  const clientIds = Array.from(clientMap.keys());
+  
+  // Fetch accumulated debt from clients table
+  const clientDebts = new Map<string, number>();
+  
+  if (clientIds.length > 0) {
+    // BatchGetItem can only handle 100 items at a time
+    const batchSize = 100;
+    for (let i = 0; i < clientIds.length; i += batchSize) {
+      const batchIds = clientIds.slice(i, i + batchSize);
+      const keys = batchIds.map(clientId => ({
+        PK: `org#${orgId}`,
+        SK: `client#${clientId}`,
+      }));
+
+      const result = await ddb.send(
+        new BatchGetCommand({
+          RequestItems: {
+            [TABLE_CLIENTS]: {
+              Keys: keys,
+              ProjectionExpression: 'id, accumulatedDebt',
+            },
+          },
+        })
+      );
+
+      const items = result.Responses?.[TABLE_CLIENTS] || [];
+      for (const item of items) {
+        clientDebts.set(item.id as string, (item.accumulatedDebt as number) || 0);
+      }
+    }
+  }
+
+  // Convert to array and sort by accumulated debt descending
   const sortedClients = Array.from(clientMap.entries())
     .map(([clientId, data]) => ({
       client_id: clientId,
       name: data.name,
-      overdue_amount: data.overdue_amount,
+      overdue_amount: clientDebts.get(clientId) || data.overdue_amount,
       days_overdue: data.max_days_overdue,
       invoices_count: data.invoices_count,
       status: 'delinquent',
