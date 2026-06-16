@@ -336,6 +336,10 @@ function getDateDaysAgo(asOf: string, days: number): Date {
  * - 31-60 days: created 31-60 days ago
  * - 61-90 days: created 61-90 days ago
  * - 90+: created more than 90 days ago
+ * 
+ * For each bucket:
+ * - current: total amount of credit notes created in that period
+ * - overdue: total pending amount (amount - paid) of overdue credit notes in that period
  */
 export async function getAgingBuckets(
   orgId: string,
@@ -349,7 +353,7 @@ export async function getAgingBuckets(
   const ninetyDaysAgo = getDateDaysAgo(asOf, 90);
 
   // Query all credit notes for the organization
-  let allCreditNotes: Array<{ amount: number; createdAt: string }> = [];
+  let allCreditNotes: Array<{ amount: number; paid: number; status: string; createdAt: string }> = [];
   let lastEvaluatedKey: Record<string, unknown> | undefined;
 
   do {
@@ -361,14 +365,17 @@ export async function getAgingBuckets(
           ':pk': `org#${orgId}`,
           ':skPrefix': 'creditnote#',
         },
-        ProjectionExpression: 'amount, createdAt',
+        ProjectionExpression: 'amount, paid, #status, createdAt',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+        },
         ExclusiveStartKey: lastEvaluatedKey,
       })
     );
 
     if (result.Items) {
       allCreditNotes = allCreditNotes.concat(
-        result.Items as Array<{ amount: number; createdAt: string }>
+        result.Items as Array<{ amount: number; paid: number; status: string; createdAt: string }>
       );
     }
     lastEvaluatedKey = result.LastEvaluatedKey;
@@ -386,27 +393,39 @@ export async function getAgingBuckets(
   for (const note of allCreditNotes) {
     const createdAt = new Date(note.createdAt);
     const amount = note.amount || 0;
+    const paid = note.paid || 0;
+    const pendingAmount = amount - paid;
 
     // Skip notes created after asOf date
     if (createdAt > asOfDate) continue;
 
+    // Determine which bucket this note belongs to
+    let bucketKey: string;
     if (createdAt >= thirtyDaysAgo) {
-      buckets['0-30'].current += amount;
+      bucketKey = '0-30';
     } else if (createdAt >= sixtyDaysAgo) {
-      buckets['31-60'].current += amount;
+      bucketKey = '31-60';
     } else if (createdAt >= ninetyDaysAgo) {
-      buckets['61-90'].current += amount;
+      bucketKey = '61-90';
     } else {
-      buckets['90+'].current += amount;
+      bucketKey = '90+';
+    }
+
+    // Add to current total
+    buckets[bucketKey].current += amount;
+
+    // Add to overdue if status is overdue
+    if (note.status === 'overdue' && pendingAmount > 0) {
+      buckets[bucketKey].overdue += pendingAmount;
     }
   }
 
   return {
     buckets: [
-      { range: '0-30', current: buckets['0-30'].current, overdue: 0 },
-      { range: '31-60', current: buckets['31-60'].current, overdue: 0 },
-      { range: '61-90', current: buckets['61-90'].current, overdue: 0 },
-      { range: '90+', current: buckets['90+'].current, overdue: 0 },
+      { range: '0-30', current: buckets['0-30'].current, overdue: buckets['0-30'].overdue },
+      { range: '31-60', current: buckets['31-60'].current, overdue: buckets['31-60'].overdue },
+      { range: '61-90', current: buckets['61-90'].current, overdue: buckets['61-90'].overdue },
+      { range: '90+', current: buckets['90+'].current, overdue: buckets['90+'].overdue },
     ],
   };
 }
