@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { requireOrgAccess } from '../shared/auth';
-import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI } from './repository';
+import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets } from './repository';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -74,6 +74,7 @@ export const getDashboardMetrics = async (
     const collectedThisMonthKPI = await getCollectedThisMonthKPI(orgId, asOf);
     const delinquentClientsKPI = await getDelinquentClientsKPI(orgId, asOf);
     const creditUtilizationKPI = await getCreditUtilizationKPI(orgId, asOf);
+    const agingData = await getAgingBuckets(orgId, asOf);
 
     const metrics = {
       as_of: asOf,
@@ -89,14 +90,7 @@ export const getDashboardMetrics = async (
         credit_utilization: creditUtilizationKPI
       },
 
-      aging: {
-        buckets: [
-          { range: "0-30",  current: 85000, overdue:     0 },
-          { range: "31-60", current: 24000, overdue: 42000 },
-          { range: "61-90", current: 15500, overdue: 28500 },
-          { range: "90+",   current: 12000, overdue: 18300 }
-        ]
-      },
+      aging: agingData,
 
       collections_vs_credits: {
         granularity: "month",

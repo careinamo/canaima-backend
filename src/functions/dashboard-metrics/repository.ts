@@ -1,7 +1,8 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 const TABLE_METRICS = process.env.TABLE_METRICS as string;
+const TABLE_CREDIT_NOTES = process.env.TABLE_CREDIT_NOTES as string;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -302,5 +303,110 @@ export async function getCreditUtilizationKPI(
     delta_direction: deltaDirection,
     compare_to: 'previous_month',
     unit: 'ratio',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Aging Buckets
+// ---------------------------------------------------------------------------
+
+export interface AgingBucket {
+  range: string;
+  current: number;
+  overdue: number;
+}
+
+export interface AgingData {
+  buckets: AgingBucket[];
+}
+
+/**
+ * Calculate the date N days before the given date
+ */
+function getDateDaysAgo(asOf: string, days: number): Date {
+  const date = new Date(asOf);
+  date.setDate(date.getDate() - days);
+  return date;
+}
+
+/**
+ * Get aging buckets for credit notes
+ * Groups credit notes by creation date into buckets:
+ * - 0-30 days: created within last 30 days
+ * - 31-60 days: created 31-60 days ago
+ * - 61-90 days: created 61-90 days ago
+ * - 90+: created more than 90 days ago
+ */
+export async function getAgingBuckets(
+  orgId: string,
+  asOf: string
+): Promise<AgingData> {
+  const asOfDate = new Date(asOf);
+  
+  // Date boundaries
+  const thirtyDaysAgo = getDateDaysAgo(asOf, 30);
+  const sixtyDaysAgo = getDateDaysAgo(asOf, 60);
+  const ninetyDaysAgo = getDateDaysAgo(asOf, 90);
+
+  // Query all credit notes for the organization
+  let allCreditNotes: Array<{ amount: number; createdAt: string }> = [];
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+  do {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_CREDIT_NOTES,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+        ExpressionAttributeValues: {
+          ':pk': `org#${orgId}`,
+          ':skPrefix': 'creditnote#',
+        },
+        ProjectionExpression: 'amount, createdAt',
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+
+    if (result.Items) {
+      allCreditNotes = allCreditNotes.concat(
+        result.Items as Array<{ amount: number; createdAt: string }>
+      );
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  // Initialize buckets
+  const buckets: Record<string, { current: number; overdue: number }> = {
+    '0-30': { current: 0, overdue: 0 },
+    '31-60': { current: 0, overdue: 0 },
+    '61-90': { current: 0, overdue: 0 },
+    '90+': { current: 0, overdue: 0 },
+  };
+
+  // Categorize credit notes by creation date
+  for (const note of allCreditNotes) {
+    const createdAt = new Date(note.createdAt);
+    const amount = note.amount || 0;
+
+    // Skip notes created after asOf date
+    if (createdAt > asOfDate) continue;
+
+    if (createdAt >= thirtyDaysAgo) {
+      buckets['0-30'].current += amount;
+    } else if (createdAt >= sixtyDaysAgo) {
+      buckets['31-60'].current += amount;
+    } else if (createdAt >= ninetyDaysAgo) {
+      buckets['61-90'].current += amount;
+    } else {
+      buckets['90+'].current += amount;
+    }
+  }
+
+  return {
+    buckets: [
+      { range: '0-30', current: buckets['0-30'].current, overdue: 0 },
+      { range: '31-60', current: buckets['31-60'].current, overdue: 0 },
+      { range: '61-90', current: buckets['61-90'].current, overdue: 0 },
+      { range: '90+', current: buckets['90+'].current, overdue: 0 },
+    ],
   };
 }
