@@ -17,6 +17,7 @@ export interface AuditLogEntry {
   action: AuditAction;
   resourceType: ResourceType;
   resourceId: string;
+  resourceNumber?: string; // Human-readable number (e.g., NC-001, AB-001)
   resourceName?: string;
   timestamp: string; // ISO 8601
   ipAddress?: string;
@@ -33,6 +34,7 @@ export interface CreateAuditLogInput {
   action: AuditAction;
   resourceType: ResourceType;
   resourceId: string;
+  resourceNumber?: string; // Human-readable number (e.g., NC-001, AB-001)
   resourceName?: string;
   ipAddress?: string;
   userAgent?: string;

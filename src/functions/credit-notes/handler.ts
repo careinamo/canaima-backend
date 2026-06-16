@@ -177,7 +177,7 @@ export const createCreditNote = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'CREATE', 'credit-note', creditNote.id, undefined, {
+    await logAuditEventSync(event, 'CREATE', 'credit-note', creditNote.id, undefined, creditNote.number, {
       clientId: creditNote.clientId,
       amount: creditNote.amount,
       dueDate: creditNote.dueDate,
@@ -246,7 +246,7 @@ export const updateCreditNote = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'UPDATE', 'credit-note', creditNote.id, undefined, {
+    await logAuditEventSync(event, 'UPDATE', 'credit-note', creditNote.id, undefined, creditNote.number, {
       clientId: creditNote.clientId,
       updatedFields: Object.keys(input),
     });
@@ -324,7 +324,7 @@ export const deleteCreditNote = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'DELETE', 'credit-note', id, undefined, {
+    await logAuditEventSync(event, 'DELETE', 'credit-note', id, undefined, creditNote.number, {
       clientId: creditNote.clientId,
       amount: creditNote.amount,
     });

@@ -72,15 +72,16 @@ Lista los eventos de auditoría de una organización.
       "userName": "John Doe",
       "userEmail": "john@example.com",
       "action": "CREATE",
-      "resourceType": "client",
-      "resourceId": "cl_abc123",
-      "resourceName": "Juan Pérez",
+      "resourceType": "credit-note",
+      "resourceId": "cn_abc123",
+      "resourceNumber": "NC-001",
+      "resourceName": null,
       "timestamp": "2026-06-07T15:30:45.123Z",
       "ipAddress": "190.15.23.45",
       "userAgent": "Mozilla/5.0...",
       "metadata": {
-        "email": "juan@example.com",
-        "phone": "+58 412 1234567"
+        "clientId": "cl_xyz789",
+        "amount": 5000
       }
     }
   ],
@@ -124,9 +125,15 @@ import { logAuditEvent } from '../shared/audit-logger';
 
 // Después de crear un cliente:
 const client = await repo.createClient(orgId, input);
-logAuditEvent(event, 'CREATE', 'client', client.id, client.name, {
+logAuditEvent(event, 'CREATE', 'client', client.id, client.name, undefined, {
   email: client.email,
   phone: client.phone,
+});
+
+// Después de crear una nota de crédito (con número):
+const creditNote = await repo.createCreditNote(orgId, input);
+logAuditEvent(event, 'CREATE', 'credit-note', creditNote.id, undefined, creditNote.number, {
+  amount: creditNote.amount,
 });
 ```
 
@@ -139,6 +146,7 @@ logAuditEvent(event, 'CREATE', 'client', client.id, client.name, {
 | `resourceType` | `'client'` \| `'credit-note'` \| `'payment'` \| `'organization'` | Tipo de recurso |
 | `resourceId` | String | ID del recurso afectado |
 | `resourceName` | String? | Nombre del recurso (opcional) |
+| `resourceNumber` | String? | Número legible del recurso, ej: NC-001, AB-001 (opcional) |
 | `metadata` | Object? | Datos adicionales (opcional) |
 
 ### Comportamiento
@@ -154,19 +162,21 @@ Para casos donde necesitas garantizar que el log se escribió (ej: antes de una 
 ```typescript
 import { logAuditEventSync } from '../shared/audit-logger';
 
-await logAuditEventSync(event, 'DELETE', 'client', clientId);
+await logAuditEventSync(event, 'DELETE', 'credit-note', id, undefined, creditNote.number, {
+  amount: creditNote.amount,
+});
 ```
 
 ## Recursos Integrados
 
 El sistema de audit logs está integrado en los siguientes handlers:
 
-| Handler | Acciones Registradas |
-|---------|---------------------|
-| **clients** | CREATE, UPDATE, DELETE, bulk-import |
-| **credit-notes** | CREATE, UPDATE, DELETE |
-| **payments** | CREATE, UPDATE, DELETE |
-| **organizations** | CREATE, UPDATE (incluyendo complete-onboarding) |
+| Handler | Acciones Registradas | Incluye Número |
+|---------|---------------------|----------------|
+| **clients** | CREATE, UPDATE, DELETE, bulk-import | No |
+| **credit-notes** | CREATE, UPDATE, DELETE | Sí (NC-001) |
+| **payments** | CREATE, UPDATE, DELETE | Sí (AB-001) |
+| **organizations** | CREATE, UPDATE (incluyendo complete-onboarding) | No |
 
 ## Metadata por Tipo de Acción
 

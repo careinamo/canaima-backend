@@ -173,7 +173,7 @@ export const createPayment = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'CREATE', 'payment', payment.id, undefined, {
+    await logAuditEventSync(event, 'CREATE', 'payment', payment.id, undefined, payment.number, {
       clientId: payment.clientId,
       creditNoteId: payment.creditNoteId,
       amount: payment.amount,
@@ -239,7 +239,7 @@ export const updatePayment = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'UPDATE', 'payment', payment.id, undefined, {
+    await logAuditEventSync(event, 'UPDATE', 'payment', payment.id, undefined, payment.number, {
       clientId: payment.clientId,
       updatedFields: Object.keys(input),
     });
@@ -292,7 +292,11 @@ export const deletePayment = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'DELETE', 'payment', id);
+    await logAuditEventSync(event, 'DELETE', 'payment', id, undefined, payment.number, {
+      clientId: payment.clientId,
+      creditNoteId: payment.creditNoteId,
+      amount: payment.amount,
+    });
 
     return respond(200, { success: true, message: 'Payment deleted' });
   } catch (error) {

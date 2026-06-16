@@ -13,13 +13,13 @@ import { getAuthOptional } from './auth';
  * 
  * @example
  * // After successful create:
- * logAuditEvent(event, 'CREATE', 'client', client.id, client.name, { email: client.email });
+ * logAuditEvent(event, 'CREATE', 'client', client.id, client.name, undefined, { email: client.email });
  * 
- * // After successful update:
- * logAuditEvent(event, 'UPDATE', 'credit-note', creditNote.id, undefined, { amount: 1000 });
+ * // After successful update with number:
+ * logAuditEvent(event, 'UPDATE', 'credit-note', creditNote.id, undefined, creditNote.number, { amount: 1000 });
  * 
  * // After successful delete:
- * logAuditEvent(event, 'DELETE', 'payment', paymentId);
+ * logAuditEvent(event, 'DELETE', 'payment', paymentId, undefined, payment.number);
  */
 export function logAuditEvent(
   event: APIGatewayProxyEventV2,
@@ -27,11 +27,12 @@ export function logAuditEvent(
   resourceType: ResourceType,
   resourceId: string,
   resourceName?: string,
+  resourceNumber?: string,
   metadata?: Record<string, unknown>
 ): void {
-  console.log('[AUDIT] logAuditEvent called:', { action, resourceType, resourceId, resourceName });
+  console.log('[AUDIT] logAuditEvent called:', { action, resourceType, resourceId, resourceName, resourceNumber });
   // Run async but don't await - fire and forget
-  logAuditEventAsync(event, action, resourceType, resourceId, resourceName, metadata)
+  logAuditEventAsync(event, action, resourceType, resourceId, resourceName, resourceNumber, metadata)
     .catch(err => console.error('[AUDIT] Failed to log audit event:', err));
 }
 
@@ -44,6 +45,7 @@ async function logAuditEventAsync(
   resourceType: ResourceType,
   resourceId: string,
   resourceName?: string,
+  resourceNumber?: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
   console.log('[AUDIT] logAuditEventAsync started');
@@ -92,6 +94,7 @@ async function logAuditEventAsync(
     action,
     resourceType,
     resourceId,
+    resourceNumber,
     resourceName,
     ipAddress,
     userAgent,
@@ -119,10 +122,11 @@ export async function logAuditEventSync(
   resourceType: ResourceType,
   resourceId: string,
   resourceName?: string,
+  resourceNumber?: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
   try {
-    await logAuditEventAsync(event, action, resourceType, resourceId, resourceName, metadata);
+    await logAuditEventAsync(event, action, resourceType, resourceId, resourceName, resourceNumber, metadata);
   } catch (err) {
     console.warn('Failed to log audit event (sync):', err);
   }
