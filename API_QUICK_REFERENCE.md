@@ -125,7 +125,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 ```json
 // Response 200
 {
-  "data": [{ "id": "", "number": "AB-001", "creditNoteId": "", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "" }],
+  "data": [{ "id": "", "number": "AB-001", "creditNoteId": "", "creditNoteNumber": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "" }],
   "pagination": { "page": 1, "limit": 10, "totalPages": 1, "totalCount": 1 }
 }
 ```
@@ -133,7 +133,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### GET `/payments/{id}` - Obtener pago
 ```json
 // Response 200
-{ "id": "", "number": "AB-001", "orgId": "", "creditNoteId": "", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "", "description": "", "clientAccumulatedDebtAtRecord": 0, "clientCreditLimitAtRecord": 0, "createdAt": "", "updatedAt": "" }
+{ "id": "", "number": "AB-001", "orgId": "", "creditNoteId": "", "creditNoteNumber": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "", "description": "", "clientAccumulatedDebtAtRecord": 0, "clientCreditLimitAtRecord": 0, "createdAt": "", "updatedAt": "" }
 ```
 
 #### POST `/payments` - Crear pago
@@ -141,7 +141,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 // Request
 { "creditNoteId": "required", "clientId": "required", "amount": "required > 0", "method": "required: cash|bank_transfer|mobile_payment|credit_card|other", "status": "pending", "bankName": "", "reference": "", "description": "" }
 // Response 201
-{ "id": "", "number": "AB-001", "creditNoteId": "", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "clientAccumulatedDebtAtRecord": 0, "createdAt": "", "updatedAt": "" }
+{ "id": "", "number": "AB-001", "creditNoteId": "", "creditNoteNumber": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "clientAccumulatedDebtAtRecord": 0, "createdAt": "", "updatedAt": "" }
 // Error 400 - Excede balance
 { "error": "Payment amount 2000 exceeds credit note remaining balance 1000" }
 ```
@@ -469,7 +469,7 @@ sequenceDiagram
 - `clientId` - Filtrar por cliente
 
 **Payments:**
-- `search` - Busca en number, clientName, invoiceNumber
+- `search` - Busca en number, clientName, invoiceNumber, creditNoteNumber
 - `status` - `confirmed` / `pending` / `rejected`
 - `method` - `cash` / `bank_transfer` / `mobile_payment` / `credit_card` / `other`
 - `clientId` - Filtrar por cliente
@@ -556,6 +556,7 @@ erDiagram
         string id PK
         string clientId FK
         string creditNoteId FK
+        string creditNoteNumber
         string number UK
         number amount
         string method

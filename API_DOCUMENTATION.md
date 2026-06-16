@@ -1238,7 +1238,7 @@ List all payments for an organization with pagination and filtering.
 |-------|------|---------|-------------|
 | page | number | 1 | Page number (starts at 1) |
 | limit | number | 10 | Records per page (max: 100) |
-| search | string | - | Search in: number, clientName, invoiceNumber (case-insensitive) |
+| search | string | - | Search in: number, clientName, invoiceNumber, creditNoteNumber (case-insensitive) |
 | status | string | - | Filter by: confirmed, pending, rejected |
 | method | string | - | Filter by: cash, bank_transfer, mobile_payment, credit_card, other |
 | clientId | string | - | Filter payments for a specific client |
@@ -1274,6 +1274,7 @@ curl "http://localhost:3000/orgs/org-default/payments?creditNoteId=660e8400-e29b
       "orgId": "org-default",
       "number": "AB-001",
       "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+      "creditNoteNumber": "NC-001",
       "clientId": "550e8400-e29b-41d4-a716-446655440001",
       "clientName": "Acme Corporation",
       "invoiceNumber": "FAC-2024-001",
@@ -1327,6 +1328,7 @@ curl "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-44
   "orgId": "org-default",
   "number": "AB-001",
   "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+  "creditNoteNumber": "NC-001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -1403,6 +1405,7 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
   "orgId": "org-default",
   "number": "AB-001",
   "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+  "creditNoteNumber": "NC-001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -1521,6 +1524,7 @@ curl -X PUT "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-
   "orgId": "org-default",
   "number": "AB-001",
   "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+  "creditNoteNumber": "NC-001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
