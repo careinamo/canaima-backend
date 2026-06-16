@@ -8,7 +8,7 @@ export interface Payment {
   creditNoteId: string;
   clientId: string;
   clientName: string;
-  invoiceNumber: string;
+  invoiceNumber?: string;
   amount: number;
   method: PaymentMethod;
   status: PaymentStatus;

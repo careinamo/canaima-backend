@@ -23,8 +23,9 @@ export function validateCreateCreditNote(body: unknown): CreateCreditNoteInput {
     throw new ValidationError('clientName is required and must be a string');
   }
 
-  if (!input.invoiceNumber || typeof input.invoiceNumber !== 'string') {
-    throw new ValidationError('invoiceNumber is required and must be a string');
+  // invoiceNumber is optional, but if provided must be a string
+  if (input.invoiceNumber !== undefined && typeof input.invoiceNumber !== 'string') {
+    throw new ValidationError('invoiceNumber must be a string');
   }
 
   if (typeof input.amount !== 'number' || input.amount <= 0) {
@@ -55,7 +56,7 @@ export function validateCreateCreditNote(body: unknown): CreateCreditNoteInput {
     number: input.number as string | undefined,
     clientId: input.clientId,
     clientName: input.clientName,
-    invoiceNumber: input.invoiceNumber,
+    invoiceNumber: input.invoiceNumber as string | undefined,
     amount: input.amount,
     status: (input.status as 'pending' | 'partial' | 'paid') || 'pending',
     dueDate: input.dueDate,

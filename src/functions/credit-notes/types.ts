@@ -6,7 +6,7 @@ export interface CreditNote {
   orgId: string;
   clientId: string;
   clientName: string;
-  invoiceNumber: string;
+  invoiceNumber?: string;
   amount: number;
   paid: number;
   status: CreditNoteStatus;
@@ -31,7 +31,7 @@ export interface CreateCreditNoteInput {
   number?: string; // Optional, auto-generated if not provided
   clientId: string;
   clientName: string;
-  invoiceNumber: string;
+  invoiceNumber?: string;
   amount: number;
   status?: CreditNoteStatus;
   dueDate: string;

@@ -2917,7 +2917,7 @@ All endpoints return standardized JSON error responses:
 ### Credit Note Validation Rules
 
 - **clientId**: Required, must be a valid UUID referencing an existing Client
-- **invoiceNumber**: Required, non-empty string
+- **invoiceNumber**: Optional, non-empty string
 - **amount**: Required, positive number (> 0)
 - **status**: Optional, one of: `pending`, `partial`, `paid`, `overdue` (default: `pending`)
 - **dueDate**: Required, valid ISO 8601 date string
@@ -2928,7 +2928,7 @@ All endpoints return standardized JSON error responses:
 
 - **creditNoteId**: Required, must reference an existing Credit Note
 - **clientId**: Required, must be a valid UUID referencing an existing Client
-- **invoiceNumber**: Required, non-empty string
+- **invoiceNumber**: Optional (inherited from Credit Note if not provided)
 - **amount**: Required, positive number (> 0)
 - **method**: Required, one of: `cash`, `bank_transfer`, `mobile_payment`, `credit_card`, `other`
 - **status**: Optional, one of: `confirmed`, `pending`, `rejected` (default: `pending`)

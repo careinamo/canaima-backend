@@ -93,7 +93,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### POST `/credit-notes` - Crear nota
 ```json
 // Request
-{ "clientId": "required", "invoiceNumber": "required", "amount": "required > 0", "dueDate": "required ISO8601", "description": "", "status": "pending" }
+{ "clientId": "required", "invoiceNumber": "optional", "amount": "required > 0", "dueDate": "required ISO8601", "description": "", "status": "pending" }
 // Response 201
 { "id": "", "number": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "paid": 0, "status": "pending", "dueDate": "", "clientAccumulatedDebtAtRecord": 0, "createdAt": "", "updatedAt": "" }
 // Error 400 - Límite excedido
@@ -139,7 +139,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### POST `/payments` - Crear pago
 ```json
 // Request
-{ "creditNoteId": "required", "clientId": "required", "invoiceNumber": "required", "amount": "required > 0", "method": "required: cash|bank_transfer|mobile_payment|credit_card|other", "status": "pending", "bankName": "", "reference": "", "description": "" }
+{ "creditNoteId": "required", "clientId": "required", "amount": "required > 0", "method": "required: cash|bank_transfer|mobile_payment|credit_card|other", "status": "pending", "bankName": "", "reference": "", "description": "" }
 // Response 201
 { "id": "", "number": "AB-001", "creditNoteId": "", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "clientAccumulatedDebtAtRecord": 0, "createdAt": "", "updatedAt": "" }
 // Error 400 - Excede balance
