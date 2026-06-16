@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { requireOrgAccess } from '../shared/auth';
-import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets, getCollectionsVsCredits } from './repository';
+import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets, getCollectionsVsCredits, getTopDelinquents } from './repository';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -76,6 +76,7 @@ export const getDashboardMetrics = async (
     const creditUtilizationKPI = await getCreditUtilizationKPI(orgId, asOf);
     const agingData = await getAgingBuckets(orgId, asOf);
     const collectionsVsCreditsData = await getCollectionsVsCredits(orgId, asOf);
+    const topDelinquentsData = await getTopDelinquents(orgId, asOf);
 
     const metrics = {
       as_of: asOf,
@@ -118,18 +119,7 @@ export const getDashboardMetrics = async (
         ]
       },
 
-      top_delinquents: {
-        items: [
-          {
-            client_id: "cli_07",
-            name: "Comercial El Rey",
-            overdue_amount: 12450,
-            days_overdue: 45,
-            invoices_count: 3,
-            status: "delinquent"
-          }
-        ]
-      }
+      top_delinquents: topDelinquentsData
     };
 
     return respond(200, { data: metrics });

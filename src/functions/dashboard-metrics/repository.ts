@@ -503,3 +503,125 @@ export async function getCollectionsVsCredits(
     series: results,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Top Delinquents
+// ---------------------------------------------------------------------------
+
+export interface TopDelinquentItem {
+  client_id: string;
+  name: string;
+  overdue_amount: number;
+  days_overdue: number;
+  invoices_count: number;
+  status: string;
+}
+
+export interface TopDelinquentsData {
+  items: TopDelinquentItem[];
+}
+
+/**
+ * Get top delinquent clients ordered by overdue amount (highest first)
+ * Groups overdue credit notes by client and calculates totals
+ */
+export async function getTopDelinquents(
+  orgId: string,
+  asOf: string,
+  limit: number = 10
+): Promise<TopDelinquentsData> {
+  const asOfDate = new Date(asOf);
+
+  // Query all overdue credit notes for the organization
+  let overdueCreditNotes: Array<{
+    clientId: string;
+    clientName: string;
+    amount: number;
+    paid: number;
+    dueDate: string;
+    status: string;
+  }> = [];
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+  do {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_CREDIT_NOTES,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+        FilterExpression: '#status = :overdue',
+        ExpressionAttributeValues: {
+          ':pk': `org#${orgId}`,
+          ':skPrefix': 'creditnote#',
+          ':overdue': 'overdue',
+        },
+        ExpressionAttributeNames: {
+          '#status': 'status',
+        },
+        ProjectionExpression: 'clientId, clientName, amount, paid, dueDate, #status',
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+
+    if (result.Items) {
+      overdueCreditNotes = overdueCreditNotes.concat(
+        result.Items as Array<{
+          clientId: string;
+          clientName: string;
+          amount: number;
+          paid: number;
+          dueDate: string;
+          status: string;
+        }>
+      );
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  // Group by client
+  const clientMap = new Map<string, {
+    name: string;
+    overdue_amount: number;
+    max_days_overdue: number;
+    invoices_count: number;
+  }>();
+
+  for (const note of overdueCreditNotes) {
+    const pendingAmount = (note.amount || 0) - (note.paid || 0);
+    if (pendingAmount <= 0) continue;
+
+    // Calculate days overdue
+    const dueDate = new Date(note.dueDate);
+    const daysOverdue = Math.max(0, Math.floor((asOfDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    const existing = clientMap.get(note.clientId);
+    if (existing) {
+      existing.overdue_amount += pendingAmount;
+      existing.max_days_overdue = Math.max(existing.max_days_overdue, daysOverdue);
+      existing.invoices_count += 1;
+    } else {
+      clientMap.set(note.clientId, {
+        name: note.clientName,
+        overdue_amount: pendingAmount,
+        max_days_overdue: daysOverdue,
+        invoices_count: 1,
+      });
+    }
+  }
+
+  // Convert to array and sort by overdue_amount descending
+  const sortedClients = Array.from(clientMap.entries())
+    .map(([clientId, data]) => ({
+      client_id: clientId,
+      name: data.name,
+      overdue_amount: data.overdue_amount,
+      days_overdue: data.max_days_overdue,
+      invoices_count: data.invoices_count,
+      status: 'delinquent',
+    }))
+    .sort((a, b) => b.overdue_amount - a.overdue_amount)
+    .slice(0, limit);
+
+  return {
+    items: sortedClients,
+  };
+}
