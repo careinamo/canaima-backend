@@ -195,7 +195,11 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
   }
 
   const newPaid = currentPaid + input.amount;
-  const newStatus = newPaid >= (creditNote.amount as number) ? 'paid' : 'partial';
+  // If fully paid, status is 'paid'. Otherwise, keep 'overdue' if it was overdue, else 'partial'
+  const currentStatus = creditNote.status as string;
+  const newStatus = newPaid >= (creditNote.amount as number) 
+    ? 'paid' 
+    : (currentStatus === 'overdue' ? 'overdue' : 'partial');
 
   // Generate or use provided number
   let paymentNumber = input.number;
@@ -488,8 +492,23 @@ export async function deletePayment(orgId: string, paymentId: string): Promise<b
       if (creditNoteResult.Item) {
         const creditNoteAmount = Number(creditNoteResult.Item.amount ?? 0);
         const currentPaid = Number(creditNoteResult.Item.paid ?? 0);
+        const currentStatus = creditNoteResult.Item.status as string;
+        const dueDate = creditNoteResult.Item.dueDate as string;
         const newPaid = Math.max(0, currentPaid - amount);
-        const newStatus = newPaid <= 0 ? 'pending' : newPaid >= creditNoteAmount ? 'paid' : 'partial';
+        
+        // Determine new status: if fully paid, 'paid'. Otherwise check if overdue by date or current status
+        let newStatus: string;
+        if (newPaid >= creditNoteAmount) {
+          newStatus = 'paid';
+        } else if (newPaid <= 0) {
+          // No payments - check if overdue by date
+          const isOverdue = dueDate && new Date(dueDate) < new Date();
+          newStatus = isOverdue ? 'overdue' : 'pending';
+        } else {
+          // Partial payment - keep overdue if it was overdue or if date has passed
+          const isOverdue = currentStatus === 'overdue' || (dueDate && new Date(dueDate) < new Date());
+          newStatus = isOverdue ? 'overdue' : 'partial';
+        }
 
         creditNoteUpdate = {
           Update: {
