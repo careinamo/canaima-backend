@@ -30,7 +30,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
  * Strip internal DynamoDB fields (PK, SK, GSI fields, numberLower) before returning to callers.
  */
 function toPayment(record: Record<string, unknown>): Payment {
-  const { PK: _pk, SK: _sk, clientIdGSI: _cg, creditNoteIdGSI: _cng, statusGSI: _sg, methodGSI: _mg, numberLower: _nl, ...rest } = record as unknown as PaymentRecord;
+  const { PK: _pk, SK: _sk, clientIdGSI: _cg, creditNoteIdGSI: _cng, statusGSI: _sg, methodGSI: _mg, numberLower: _nl, creditNoteNumberLower: _cnnl, ...rest } = record as unknown as PaymentRecord;
   return rest as Payment;
 }
 
@@ -109,7 +109,7 @@ export async function listPayments(params: ListPaymentsParams): Promise<{ items:
   }
 
   if (params.search) {
-    filterParts.push('(contains(numberLower, :search) OR contains(clientName, :search) OR contains(invoiceNumber, :search))');
+    filterParts.push('(contains(numberLower, :search) OR contains(clientName, :search) OR contains(invoiceNumber, :search) OR contains(creditNoteNumberLower, :search))');
     exprValues[':search'] = params.search.toLowerCase();
   }
 
@@ -211,6 +211,8 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
   // Calculate the accumulated debt AFTER this payment is processed
   const clientAccumulatedDebtAfterPayment = client.accumulatedDebt - input.amount;
 
+  const creditNoteNumber = creditNote.number as string;
+
   const record: PaymentRecord = {
     PK: `org#${orgId}`,
     SK: `payment#${paymentId}`,
@@ -220,10 +222,12 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     numberLower: paymentNumber.toLowerCase(),
     creditNoteId: input.creditNoteId,
     creditNoteIdGSI: input.creditNoteId,
+    creditNoteNumber,
+    creditNoteNumberLower: creditNoteNumber.toLowerCase(),
     clientId: input.clientId,
     clientIdGSI: input.clientId,
     clientName: client.name,
-    invoiceNumber: creditNote.invoiceNumber as string,
+    invoiceNumber: creditNote.invoiceNumber as string | undefined,
     amount: input.amount,
     method: input.method,
     methodGSI: input.method,
