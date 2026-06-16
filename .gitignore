@@ -28,3 +28,6 @@ npm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Frontend prompts (not to be committed)
+FRONTEND_PROMPT_*.md
