@@ -25,6 +25,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 | **User** | Usuario del sistema (sync con Clerk) |
 | **AuditLog** | Registro de auditoría de cambios |
 | **DashboardMetrics** | Métricas agregadas para dashboard |
+| **Reports** | Generación de reportes PDF |
 
 ---
 
@@ -185,6 +186,38 @@ Acme Corp,J123456789,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5
   "errors": [{ "row": 3, "data": {...}, "error": "email already exists" }]
 }
 ```
+
+---
+
+### Reports `/orgs/{orgId}/reports`
+
+#### POST `/reports/clients-debt` - Generar reporte PDF de deuda de clientes
+> Genera un reporte PDF con la lista de todos los clientes y su deuda acumulada. Devuelve una URL presignada para descargar el PDF (válida por 1 hora).
+
+```json
+// Response 200
+{
+  "success": true,
+  "downloadUrl": "https://canaima-backend-dev-reports.s3.amazonaws.com/...",
+  "expiresIn": 3600,
+  "fileName": "clients-debt-report-org_xxx-2026-06-22T14-30-00-000Z.pdf",
+  "generatedAt": "2026-06-22T14:30:00.000Z",
+  "totalClients": 207,
+  "totalDebt": 500000.00
+}
+```
+
+**Contenido del PDF:**
+- Encabezado con nombre de organización y fecha
+- Tabla con columnas: Cliente, Documento, Deuda Acumulada
+- Total de deuda al final
+- Paginación automática
+
+**Notas:**
+- El PDF se almacena en S3 y se elimina automáticamente después de 7 días
+- La URL presignada expira en 1 hora
+- Timeout de Lambda: 60 segundos
+- Memoria: 1024 MB
 
 ---
 

@@ -57,6 +57,8 @@ provider:
     CLERK_WEBHOOK_SECRET: ${env:CLERK_WEBHOOK_SECRET, 'whsec_e8xKTyG00ObEUVhEI7waMxiinf7ylrWh'}
     # Clerk Backend API key (for updating organizations in Clerk)
     CLERK_SECRET_KEY: ${env:CLERK_SECRET_KEY, 'sk_test_JbLIXqTkc1hZIqMnLS9eIWQBBC4sStIrNGHsF6sQnY'}
+    # S3 bucket for reports
+    REPORTS_BUCKET: ${self:service}-${self:provider.stage}-reports
   iam:
     role:
       statements:
@@ -128,6 +130,12 @@ provider:
           Resource:
             - !GetAtt EventBridgeInvokeLambdaRole.Arn
             - !Sub "arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-EventBridgeInvokeLambdaRole"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource:
+            - !Sub "arn:aws:s3:::${self:service}-${self:provider.stage}-reports/*"
 
 plugins:
   - serverless-offline
@@ -478,6 +486,18 @@ functions:
       - sqs:
           arn: !GetAtt ClientDelinquencyCheckQueue.Arn
           batchSize: 10
+
+  # ===== Reports endpoints =====
+  generateClientsDebtReport:
+    handler: src/functions/reports/handler.generateClientsDebtReport
+    memorySize: 1024
+    timeout: 60
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/reports/clients-debt
+          method: POST
+          authorizer:
+            name: clerkAuthorizer
 
 resources:
   Resources:
@@ -846,6 +866,31 @@ resources:
                     - lambda:InvokeFunction
                   Resource:
                     - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-processCreditNoteExpiration'
+
+    # ===== S3 Bucket for Reports =====
+    ReportsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:service}-${self:provider.stage}-reports
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        LifecycleConfiguration:
+          Rules:
+            - Id: DeleteOldReports
+              Status: Enabled
+              ExpirationInDays: 7
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - GET
+              AllowedOrigins:
+                - '*'
+              MaxAge: 3000
 
     # ===== API Gateway Custom Domain =====
     ApiGatewayCustomDomain:
