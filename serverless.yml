@@ -591,6 +591,17 @@ functions:
           authorizer:
             name: clerkAuthorizer
 
+  # ===== Notification Event Processor (SNS triggered) =====
+  processNotificationEvent:
+    handler: src/functions/notifications/event-handler.handler
+    timeout: 30
+    environment:
+      IS_OFFLINE: ${env:IS_OFFLINE, 'false'}
+    events:
+      - sns:
+          arn: !Ref NotificationEventsTopic
+          topicName: ${self:service}-${self:provider.stage}-notification-events
+
   # ===== WebSocket handlers =====
   websocketConnect:
     handler: src/functions/websocket/handler.connect
@@ -1082,6 +1093,55 @@ resources:
           - CertificateArn: ${self:custom.stages.${self:provider.stage}.certificateArn}
             EndpointType: REGIONAL
             SecurityPolicy: TLS_1_2
+
+    # ===== SNS Topic for Notification Events =====
+    NotificationEventsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-${self:provider.stage}-notification-events
+        DisplayName: Notification Events for Canaima
+
+    # ===== SNS Topic Policy =====
+    NotificationEventsTopicPolicy:
+      Type: AWS::SNS::TopicPolicy
+      Properties:
+        Topics:
+          - !Ref NotificationEventsTopic
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: AllowEventBridgeToPublish
+              Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+              Action: sns:Publish
+              Resource: !Ref NotificationEventsTopic
+
+    # ===== EventBridge Rule: Route CRUD events to SNS for Notifications =====
+    NotificationEventsRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventBusName: default
+        Name: ${self:service}-${self:provider.stage}-notification-events-rule
+        Description: Route CRUD events to SNS for notification creation
+        EventPattern:
+          source:
+            - canaima.crud
+          detail-type:
+            - CreditNoteCreated
+            - CreditNoteUpdated
+            - CreditNoteDeleted
+            - CreditNotePaid
+            - PaymentCreated
+            - PaymentUpdated
+            - PaymentDeleted
+            - ClientCreated
+            - ClientUpdated
+            - ClientDeleted
+        State: ENABLED
+        Targets:
+          - Arn: !Ref NotificationEventsTopic
+            Id: NotificationEventsTarget
 
     # ===== API Gateway Domain Name Mapping =====
     ApiGatewayDomainMapping:

@@ -1,8 +1,9 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { ValidationError, validateCreateClient, validateUpdateClient, parseCsvClients } from './validators';
 import * as repo from './repository';
-import { requireOrgAccess } from '../shared/auth';
+import { getAuth, requireOrgAccess } from '../shared/auth';
 import { logAuditEventSync } from '../shared/audit-logger';
+import { publishCrudEvent } from '../shared/crud-trigger';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -119,6 +120,8 @@ export const createClient = async (
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
 
+    const auth = getAuth(event);
+
     let body: unknown;
     try {
       body = JSON.parse(event.body ?? '{}');
@@ -144,6 +147,11 @@ export const createClient = async (
       creditLimit: client.creditLimit,
     });
 
+    // Publish CRUD event for notifications and other downstream processors
+    publishCrudEvent('ClientCreated', orgId, client.id, client, auth.userId).catch(err =>
+      console.error('Failed to publish ClientCreated event:', err)
+    );
+
     return respond(201, client);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -167,6 +175,8 @@ export const updateClient = async (
     // Validate user has access to this organization
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
+
+    const auth = getAuth(event);
 
     let body: unknown;
     try {
@@ -193,6 +203,11 @@ export const updateClient = async (
       updatedFields: Object.keys(input),
     });
 
+    // Publish CRUD event for notifications and other downstream processors
+    publishCrudEvent('ClientUpdated', orgId, client.id, client, auth.userId).catch(err =>
+      console.error('Failed to publish ClientUpdated event:', err)
+    );
+
     return respond(200, client);
   } catch (e) {
     if (e instanceof ValidationError) return clientError(400, e.message);
@@ -218,11 +233,18 @@ export const deleteClient = async (
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
 
+    const auth = getAuth(event);
+
     const deleted = await repo.deleteClient(orgId, id);
     if (!deleted) return clientError(404, 'Client not found');
 
     // Log audit event
     await logAuditEventSync(event, 'DELETE', 'client', id, undefined, undefined);
+
+    // Publish CRUD event for notifications and other downstream processors
+    publishCrudEvent('ClientDeleted', orgId, id, { id, orgId }, auth.userId).catch(err =>
+      console.error('Failed to publish ClientDeleted event:', err)
+    );
 
     return respond(200, { success: true, message: 'Client deleted' });
   } catch (error) {

@@ -15,6 +15,8 @@ export type NotificationType =
   | 'payment_updated'
   | 'payment_deleted'
   | 'client_created'
+  | 'client_updated'
+  | 'client_deleted'
   | 'client_delinquent'
   | 'report_ready'
   | 'org_invite'

@@ -18,7 +18,10 @@ export type CrudEventType =
   | 'CreditNotePaid'
   | 'PaymentCreated'
   | 'PaymentUpdated'
-  | 'PaymentDeleted';
+  | 'PaymentDeleted'
+  | 'ClientCreated'
+  | 'ClientUpdated'
+  | 'ClientDeleted';
 
 /**
  * Publish a CRUD event to EventBridge
@@ -26,12 +29,14 @@ export type CrudEventType =
  * @param orgId Organization ID
  * @param entityId ID of the entity being created/updated/deleted
  * @param entityData Full entity data for downstream processors
+ * @param actorUserId Optional: ID of the user who performed the action
  */
 export async function publishCrudEvent(
   eventType: CrudEventType,
   orgId: string,
   entityId: string,
-  entityData?: Record<string, unknown>,
+  entityData?: unknown,
+  actorUserId?: string,
 ): Promise<void> {
   try {
     const params = {
@@ -44,6 +49,7 @@ export async function publishCrudEvent(
             orgId,
             entityId,
             data: entityData,
+            actorUserId,
             timestamp: new Date().toISOString(),
           }),
           EventBusName: 'default',
