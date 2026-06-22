@@ -26,23 +26,23 @@ The Canaima Backend provides a real-time notifications system using **API Gatewa
 
 ---
 
-## 1. WebSocket URL (per Environment)
+## 1. URLs por Entorno
+
+### REST API
+
+| Environment | REST API URL |
+|-------------|---------------|
+| **dev** | `https://api-dev.canaimacredito.com` |
+| **prod** | `https://api.canaimacredito.com` |
+
+### WebSocket
 
 | Environment | WebSocket URL |
 |-------------|---------------|
-| **dev** | `wss://{api-id}.execute-api.us-west-2.amazonaws.com/dev` |
+| **dev** | `wss://bfbk7md9h4.execute-api.us-west-2.amazonaws.com/dev` |
 | **prod** | `wss://{api-id}.execute-api.us-east-1.amazonaws.com/prod` |
 
-> **Note:** The actual `{api-id}` is generated after deployment. You can retrieve it from the CloudFormation Outputs:
-> - `WebSocketApiEndpoint` - Full WebSocket URL
-> - `WebSocketApiId` - The API ID
-
-**After deployment, run:**
-```bash
-serverless info --stage dev
-```
-
-Look for `WebsocketsApiUrl` in the output.
+> **Note:** El WebSocket API ID de prod se genera en el primer deploy a producción.
 
 ---
 
@@ -60,7 +60,8 @@ wss://{websocket-url}?token={jwt_token}
 **Example:**
 ```javascript
 const jwt = await clerk.session.getToken();
-const ws = new WebSocket(`wss://abc123.execute-api.us-west-2.amazonaws.com/dev?token=${jwt}`);
+// Dev:
+const ws = new WebSocket(`wss://bfbk7md9h4.execute-api.us-west-2.amazonaws.com/dev?token=${jwt}`);
 ```
 
 ### Token Validation
@@ -546,7 +547,8 @@ class NotificationService {
 
   async connect() {
     const token = await this.getToken();
-    const wsUrl = `wss://abc123.execute-api.us-west-2.amazonaws.com/dev?token=${token}`;
+    // Use environment-specific WebSocket URL
+    const wsUrl = import.meta.env.VITE_WEBSOCKET_URL + `?token=${token}`;
     
     this.ws = new WebSocket(wsUrl);
     
@@ -761,8 +763,8 @@ curl -X POST https://api.example.com/notifications \
 # Install wscat
 npm install -g wscat
 
-# Connect
-wscat -c "wss://abc123.execute-api.us-west-2.amazonaws.com/dev?token=${JWT}"
+# Connect (dev)
+wscat -c "wss://bfbk7md9h4.execute-api.us-west-2.amazonaws.com/dev?token=${JWT}"
 
 # Send heartbeat
 {"action": "heartbeat"}
@@ -859,9 +861,21 @@ Use this prompt for your frontend AI agent to implement the notifications UI:
 ---
 
 ```
-Implementa un sistema de notificaciones en tiempo real para la aplicación Canaima. El backend ya está configurado con:
+Implementa un sistema de notificaciones en tiempo real para la aplicación Canaima. El backend ya está configurado.
 
-1. **WebSocket URL**: `wss://{api-id}.execute-api.{region}.amazonaws.com/{stage}?token={jwt}`
+## URLs por Entorno
+
+**REST API** (usar la variable de entorno existente del API, ej: VITE_API_URL):
+- Dev: https://api-dev.canaimacredito.com
+- Prod: https://api.canaimacredito.com
+
+**WebSocket** (crear nueva variable VITE_WEBSOCKET_URL):
+- Dev: wss://bfbk7md9h4.execute-api.us-west-2.amazonaws.com/dev
+- Prod: (se actualizará después del primer deploy a prod)
+
+## Conexión WebSocket
+
+1. **URL de conexión**: `${VITE_WEBSOCKET_URL}?token={jwt}`
    - La autenticación se hace via JWT de Clerk en el query string
    - El token se obtiene con `clerk.session.getToken()`
 
@@ -893,7 +907,7 @@ Implementa un sistema de notificaciones en tiempo real para la aplicación Canai
    - `{"action": "markRead", "notificationId": "uuid"}`
    - `{"action": "markAllRead", "orgId": "optional"}`
 
-5. **REST Endpoints** (con Authorization header):
+5. **REST Endpoints** (usar el host del API según entorno, con Authorization header):
    - `GET /notifications?unreadOnly=true&limit=20` - Listar
    - `PATCH /notifications/{id}/read` - Marcar leída
    - `PATCH /notifications/read-all` - Marcar todas leídas
