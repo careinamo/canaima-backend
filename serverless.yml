@@ -49,6 +49,11 @@ provider:
     TABLE_USERS: ${env:TABLE_USERS_BASE, 'users'}-${self:provider.stage}
     TABLE_WEBHOOK_EVENTS: ${env:TABLE_WEBHOOK_EVENTS_BASE, 'webhook-events'}-${self:provider.stage}
     TABLE_AUDIT_LOGS: ${env:TABLE_AUDIT_LOGS_BASE, 'audit-logs'}-${self:provider.stage}
+    # Notifications and WebSocket tables
+    TABLE_NOTIFICATIONS: ${env:TABLE_NOTIFICATIONS_BASE, 'notifications'}-${self:provider.stage}
+    TABLE_WEBSOCKET_CONNECTIONS: ${env:TABLE_WEBSOCKET_CONNECTIONS_BASE, 'websocket-connections'}-${self:provider.stage}
+    # WebSocket endpoint (set dynamically after deploy)
+    WEBSOCKET_ENDPOINT: !Sub "https://${WebsocketsApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}"
     # Credit note timezone (default: Venezuela)
     CREDIT_NOTE_TIMEZONE: ${env:CREDIT_NOTE_TIMEZONE, 'America/Caracas'}
     # Clerk authentication
@@ -88,6 +93,10 @@ provider:
             - !Sub "${WebhookEventsTable.Arn}/index/*"
             - !GetAtt AuditLogsTable.Arn
             - !Sub "${AuditLogsTable.Arn}/index/*"
+            - !GetAtt NotificationsTable.Arn
+            - !Sub "${NotificationsTable.Arn}/index/*"
+            - !GetAtt WebSocketConnectionsTable.Arn
+            - !Sub "${WebSocketConnectionsTable.Arn}/index/*"
         - Effect: Allow
           Action:
             - lambda:InvokeFunction
@@ -136,6 +145,12 @@ provider:
             - s3:GetObject
           Resource:
             - !Sub "arn:aws:s3:::${self:service}-${self:provider.stage}-reports/*"
+        # WebSocket API Gateway Management API permissions
+        - Effect: Allow
+          Action:
+            - execute-api:ManageConnections
+          Resource:
+            - !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/${self:provider.stage}/*"
 
 plugins:
   - serverless-offline
@@ -499,6 +514,98 @@ functions:
           authorizer:
             name: clerkAuthorizer
 
+  # ===== Notifications endpoints =====
+  listNotifications:
+    handler: src/functions/notifications/handler.listNotifications
+    events:
+      - httpApi:
+          path: /notifications
+          method: GET
+          authorizer:
+            name: clerkAuthorizer
+
+  getNotification:
+    handler: src/functions/notifications/handler.getNotification
+    events:
+      - httpApi:
+          path: /notifications/{id}
+          method: GET
+          authorizer:
+            name: clerkAuthorizer
+
+  createNotification:
+    handler: src/functions/notifications/handler.createNotification
+    events:
+      - httpApi:
+          path: /notifications
+          method: POST
+          authorizer:
+            name: clerkAuthorizer
+
+  updateNotification:
+    handler: src/functions/notifications/handler.updateNotification
+    events:
+      - httpApi:
+          path: /notifications/{id}
+          method: PATCH
+          authorizer:
+            name: clerkAuthorizer
+
+  markNotificationRead:
+    handler: src/functions/notifications/handler.markNotificationRead
+    events:
+      - httpApi:
+          path: /notifications/{id}/read
+          method: PATCH
+          authorizer:
+            name: clerkAuthorizer
+
+  markAllNotificationsRead:
+    handler: src/functions/notifications/handler.markAllNotificationsRead
+    events:
+      - httpApi:
+          path: /notifications/read-all
+          method: PATCH
+          authorizer:
+            name: clerkAuthorizer
+
+  deleteNotification:
+    handler: src/functions/notifications/handler.deleteNotification
+    events:
+      - httpApi:
+          path: /notifications/{id}
+          method: DELETE
+          authorizer:
+            name: clerkAuthorizer
+
+  getUnreadCount:
+    handler: src/functions/notifications/handler.getUnreadCount
+    events:
+      - httpApi:
+          path: /notifications/unread-count
+          method: GET
+          authorizer:
+            name: clerkAuthorizer
+
+  # ===== WebSocket handlers =====
+  websocketConnect:
+    handler: src/functions/websocket/handler.connect
+    events:
+      - websocket:
+          route: $connect
+
+  websocketDisconnect:
+    handler: src/functions/websocket/handler.disconnect
+    events:
+      - websocket:
+          route: $disconnect
+
+  websocketDefault:
+    handler: src/functions/websocket/handler.defaultHandler
+    events:
+      - websocket:
+          route: $default
+
 resources:
   Resources:
     # ===== Existing Tables =====
@@ -720,6 +827,72 @@ resources:
           AttributeName: ttl
           Enabled: true
 
+    # ===== Notifications Table =====
+    NotificationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_NOTIFICATIONS_BASE, 'notifications'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: byOrg
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    # ===== WebSocket Connections Table =====
+    WebSocketConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:TABLE_WEBSOCKET_CONNECTIONS_BASE, 'websocket-connections'}-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: byUser
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
     # ===== SQS Queue for Metrics Calculations =====
     MetricsQueue:
       Type: AWS::SQS::Queue
@@ -915,3 +1088,13 @@ resources:
     ApiGatewayDomainName:
       Description: API Gateway Custom Domain Target
       Value: !GetAtt ApiGatewayCustomDomain.RegionalDomainName
+
+    WebSocketApiEndpoint:
+      Description: WebSocket API Endpoint URL
+      Value: !Sub "wss://${WebsocketsApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}"
+      Export:
+        Name: !Sub "${AWS::StackName}-WebSocketApiEndpoint"
+
+    WebSocketApiId:
+      Description: WebSocket API ID
+      Value: !Ref WebsocketsApi
