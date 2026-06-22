@@ -18,6 +18,9 @@ import type {
 const CLERK_JWKS_URL = process.env.CLERK_JWKS_URL || 'https://live-spaniel-88.clerk.accounts.dev/.well-known/jwks.json';
 const CLERK_ISSUER = process.env.CLERK_ISSUER || 'https://live-spaniel-88.clerk.accounts.dev';
 
+// Check if running in local/offline mode
+const isOffline = process.env.IS_OFFLINE === 'true' || process.env.IS_LOCAL === 'true';
+
 // Heartbeat interval in milliseconds (client should ping every 5 minutes)
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -33,8 +36,24 @@ function getJWKS() {
 
 /**
  * Verify JWT token from query string
+ * In offline mode, accepts 'dev' token or extracts userId from token string
  */
 async function verifyToken(token: string): Promise<{ userId: string; orgId?: string } | null> {
+  // Offline mode bypass
+  if (isOffline) {
+    console.log('[DEV MODE] WebSocket token bypass enabled');
+    // Accept 'dev' or 'dev_userId' format
+    if (token === 'dev') {
+      return { userId: 'dev_user_local', orgId: 'org-default' };
+    }
+    if (token.startsWith('dev_')) {
+      const userId = token.substring(4);
+      return { userId, orgId: 'org-default' };
+    }
+    // Accept any token in offline mode and extract a dev user
+    return { userId: token.includes('_') ? token : 'dev_user_local', orgId: 'org-default' };
+  }
+
   try {
     const { payload } = await jwtVerify(token, getJWKS(), {
       issuer: CLERK_ISSUER,

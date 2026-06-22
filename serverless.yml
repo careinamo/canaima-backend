@@ -172,6 +172,8 @@ functions:
   # ===== Clerk JWT Authorizer =====
   clerkAuthorizer:
     handler: src/functions/shared/clerk-authorizer.handler
+    environment:
+      IS_OFFLINE: ${env:IS_OFFLINE, 'false'}
 
   # Hello endpoint (public - no auth)
   hello:
@@ -535,6 +537,8 @@ functions:
 
   createNotification:
     handler: src/functions/notifications/handler.createNotification
+    environment:
+      IS_OFFLINE: ${env:IS_OFFLINE, 'false'}
     events:
       - httpApi:
           path: /notifications
@@ -590,6 +594,8 @@ functions:
   # ===== WebSocket handlers =====
   websocketConnect:
     handler: src/functions/websocket/handler.connect
+    environment:
+      IS_OFFLINE: ${env:IS_OFFLINE, 'false'}
     events:
       - websocket:
           route: $connect
@@ -602,6 +608,8 @@ functions:
 
   websocketDefault:
     handler: src/functions/websocket/handler.defaultHandler
+    environment:
+      IS_OFFLINE: ${env:IS_OFFLINE, 'false'}
     events:
       - websocket:
           route: $default

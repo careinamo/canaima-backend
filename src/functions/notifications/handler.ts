@@ -7,6 +7,7 @@ import {
 } from './validators';
 import * as repo from './repository';
 import { getAuth } from '../shared/auth';
+import { broadcastNotification } from './notification-service';
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -160,6 +161,14 @@ export const createNotification = async (
     }
 
     const notification = await repo.createNotification(input);
+
+    // Broadcast notification via WebSocket to connected clients
+    try {
+      await broadcastNotification(notification);
+    } catch (broadcastError) {
+      // Don't fail the request if broadcast fails - notification is already saved
+      console.error('Failed to broadcast notification:', broadcastError);
+    }
 
     return respond(201, notification);
   } catch (error) {

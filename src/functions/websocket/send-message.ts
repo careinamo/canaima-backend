@@ -6,6 +6,9 @@ import {
 import * as connectionsRepo from './connections-repository';
 import type { WebSocketMessage } from '../notifications/types';
 
+// Check if running in local/offline mode
+const isOffline = process.env.IS_OFFLINE === 'true' || process.env.IS_LOCAL === 'true';
+
 // Cache clients by endpoint
 const clientCache = new Map<string, ApiGatewayManagementApiClient>();
 
@@ -13,12 +16,20 @@ const clientCache = new Map<string, ApiGatewayManagementApiClient>();
  * Get or create an API Gateway Management API client for the given endpoint
  */
 function getClient(endpoint: string): ApiGatewayManagementApiClient {
-  let client = clientCache.get(endpoint);
+  // In offline mode, use the local serverless-offline endpoint
+  const actualEndpoint = isOffline ? 'http://localhost:3001' : endpoint;
+  
+  let client = clientCache.get(actualEndpoint);
   if (!client) {
     client = new ApiGatewayManagementApiClient({
-      endpoint,
+      endpoint: actualEndpoint,
+      // In offline mode, we need to disable SSL validation
+      ...(isOffline && {
+        region: 'us-west-2',
+        credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
+      }),
     });
-    clientCache.set(endpoint, client);
+    clientCache.set(actualEndpoint, client);
   }
   return client;
 }

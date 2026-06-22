@@ -15,10 +15,18 @@ import type {
   NotificationPayload,
 } from './types';
 
+// Check if running in local/offline mode
+const isOffline = process.env.IS_OFFLINE === 'true' || process.env.IS_LOCAL === 'true';
+
 /**
  * Get the WebSocket endpoint URL from environment variables
  */
 function getWebSocketEndpoint(): string | null {
+  // In offline mode, use local endpoint
+  if (isOffline) {
+    return 'http://localhost:3001';
+  }
+  
   const wsEndpoint = process.env.WEBSOCKET_ENDPOINT;
   if (!wsEndpoint) {
     console.warn('WEBSOCKET_ENDPOINT not configured, notifications will not be sent via WebSocket');
