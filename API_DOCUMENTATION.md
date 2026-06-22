@@ -9,6 +9,33 @@ Canaima Backend is a B2B credit and accounts-receivable serverless application b
 - **Storage**: AWS DynamoDB (single-table design)
 - **Deployment**: AWS Lambda + HTTP API Gateway
 
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Project Structure](#project-structure)
+3. [Configuration](#configuration)
+4. [Credit Limit Logic Overview](#credit-limit-logic-overview)
+5. **API Endpoints**
+   - [Clients API Endpoints](#clients-api-endpoints)
+   - [Credit Notes API Endpoints](#credit-notes-api-endpoints)
+   - [Credit Note Expiration & Client Delinquency Management](#credit-note-expiration--client-delinquency-management)
+   - [Payments API Endpoints](#payments-api-endpoints)
+   - [Organizations API Endpoints](#organizations-api-endpoints)
+   - [Users API Endpoints](#users-api-endpoints)
+   - [Audit Logs API Endpoints](#audit-logs-api-endpoints)
+   - [Dashboard Metrics API Endpoints](#dashboard-metrics-api-endpoints)
+   - [Webhooks API Endpoints](#webhooks-api-endpoints)
+   - [Health Check Endpoint](#health-check-endpoint)
+   - [Credit Notes Debug Endpoints](#credit-notes-debug-endpoints)
+6. **Database**
+   - [DynamoDB Table Schemas](#dynamodb-table-schemas)
+   - [Credit Notes DynamoDB Table Schema](#credit-notes-dynamodb-table-schema)
+7. [Development](#development)
+
+---
+
 ## Project Structure
 
 ```
@@ -49,6 +76,8 @@ src/
 │   │   ├── repository.ts   # DynamoDB operations
 │   │   ├── types.ts        # TypeScript interfaces
 │   │   └── validators.ts   # Input validation
+│   ├── dashboard-metrics/  # Dashboard Metrics module
+│   │   └── handler.ts      # Aggregated metrics endpoint
 │   ├── webhooks/           # Webhook handlers
 │   │   └── clerk/          # Clerk webhook processor
 │   │       ├── handler.ts
@@ -323,6 +352,7 @@ Create a new client account within an organization.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | ✓ | Client name |
+| `document` | string | - | Client document ID (e.g., V20345537, J148536972) |
 | `email` | string | - | Client email (optional, must be unique if provided) |
 | `phone` | string | - | Phone number |
 | `address` | string | - | Physical address |
@@ -391,6 +421,7 @@ Update one or more fields of an existing client.
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Client name |
+| `document` | string | Client document ID (e.g., V20345537, J148536972) |
 | `email` | string | Client email (must remain unique) |
 | `phone` | string | Phone number |
 | `address` | string | Physical address |
@@ -506,7 +537,7 @@ Import multiple clients at once from a CSV file. Maximum of 50 clients per reque
 **Request Body:**
 
 Plain text CSV content with the following format:
-- **Header row required** with column names: `name` is required, optionally: `email`, `phone`, `address`, `active`, `delinquent`, `creditLimit`, `notes`
+- **Header row required** with column names: `name` is required, optionally: `document`, `email`, `phone`, `address`, `active`, `delinquent`, `creditLimit`, `accumulatedDebt`, `notes`
 - One client per line
 - Columns separated by commas
 - Maximum 50 data rows (excluding header)
@@ -514,10 +545,10 @@ Plain text CSV content with the following format:
 **CSV Format Example:**
 
 ```csv
-name,email,phone,address,active,delinquent,creditLimit,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
-Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,Referred by Acme
-Global Traders,,789 Pine Rd,false,false,30000,Sin email registrado
+name,document,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
+Acme Corp,J123456789,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
+Tech Solutions,V20345537,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,0,Referred by Acme
+Global Traders,J148536972,,789 Pine Rd,false,false,30000,2500,Sin email registrado
 ```
 
 > **Note:** Email es opcional. En el ejemplo anterior, "Global Traders" se importa sin email.
@@ -641,6 +672,7 @@ When some rows fail validation but others succeed:
 - `active` must be a boolean (defaults to `true` if omitted)
 - `delinquent` must be a boolean (defaults to `false` if omitted)
 - `creditLimit` must be a non-negative number (defaults to 0 if omitted)
+- `accumulatedDebt` is optional, must be a non-negative number (defaults to 0 if omitted). **Important:** `accumulatedDebt` cannot exceed `creditLimit`
 - `phone`, `address`, and `notes` are optional
 
 **Partial Success Handling:**
@@ -1064,6 +1096,17 @@ curl -X DELETE http://localhost:3000/orgs/org-default/credit-notes/660e8400-e29b
 **Error Responses:**
 
 - **404 Not Found**: Credit note with the given ID does not exist
+- **409 Conflict**: Credit note has associated payments that must be deleted first
+
+**Error Response (409 Conflict - Has Associated Payments):**
+
+```json
+{
+  "error": "Cannot delete credit note with associated payments",
+  "code": "HAS_ASSOCIATED_PAYMENTS",
+  "message": "Esta nota de crédito tiene pagos asociados. Debe eliminar los pagos primero antes de eliminar la nota de crédito."
+}
+```
 
 ---
 
@@ -1198,7 +1241,7 @@ List all payments for an organization with pagination and filtering.
 |-------|------|---------|-------------|
 | page | number | 1 | Page number (starts at 1) |
 | limit | number | 10 | Records per page (max: 100) |
-| search | string | - | Search in: number, clientName, invoiceNumber (case-insensitive) |
+| search | string | - | Search in: number, clientName, invoiceNumber, creditNoteNumber (case-insensitive) |
 | status | string | - | Filter by: confirmed, pending, rejected |
 | method | string | - | Filter by: cash, bank_transfer, mobile_payment, credit_card, other |
 | clientId | string | - | Filter payments for a specific client |
@@ -1234,6 +1277,7 @@ curl "http://localhost:3000/orgs/org-default/payments?creditNoteId=660e8400-e29b
       "orgId": "org-default",
       "number": "AB-001",
       "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+      "creditNoteNumber": "NC-001",
       "clientId": "550e8400-e29b-41d4-a716-446655440001",
       "clientName": "Acme Corporation",
       "invoiceNumber": "FAC-2024-001",
@@ -1287,6 +1331,7 @@ curl "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-a716-44
   "orgId": "org-default",
   "number": "AB-001",
   "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+  "creditNoteNumber": "NC-001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -1363,6 +1408,7 @@ curl -X POST "http://localhost:3000/orgs/org-default/payments" \
   "orgId": "org-default",
   "number": "AB-001",
   "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+  "creditNoteNumber": "NC-001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -1481,6 +1527,7 @@ curl -X PUT "http://localhost:3000/orgs/org-default/payments/770e8400-e29b-41d4-
   "orgId": "org-default",
   "number": "AB-001",
   "creditNoteId": "660e8400-e29b-41d4-a716-446655550001",
+  "creditNoteNumber": "NC-001",
   "clientId": "550e8400-e29b-41d4-a716-446655440001",
   "clientName": "Acme Corporation",
   "invoiceNumber": "FAC-2024-001",
@@ -2098,6 +2145,146 @@ curl "http://localhost:3000/orgs/org-default/audit-logs?startDate=2026-06-01&end
 **Error Responses:**
 
 - **400 Bad Request**: Invalid action or resourceType value
+
+---
+
+## Dashboard Metrics API Endpoints
+
+### Overview
+
+The Dashboard Metrics module provides aggregated metrics for building dashboards. All metrics are scoped by organization and calculated from DynamoDB tables.
+
+### Endpoints Table
+
+| Method | Path | Handler | Description | Status Codes |
+|--------|------|---------|-------------|--------------|
+| **GET** | `/orgs/{orgId}/dashboard-metrics` | `getDashboardMetrics` | Get aggregated dashboard metrics | 200, 400 |
+
+---
+
+### 1. GET /orgs/{orgId}/dashboard-metrics — Get Dashboard Metrics
+
+Retrieve aggregated metrics for the organization's dashboard.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `orgId` | string | Organization ID |
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `as_of` | string | Today | Reference date for metrics calculation (ISO 8601: `YYYY-MM-DD`) |
+
+**Example Request:**
+
+```bash
+curl "http://localhost:3000/orgs/org-default/dashboard-metrics?as_of=2026-06-15" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": {
+    "as_of": "2026-06-15",
+    "range": "6m",
+    "currency": "USD",
+    "timezone": "America/Caracas",
+    "generated_at": "2026-06-15T14:32:10Z",
+
+    "kpis": {
+      "credit_notes_this_month": { "value": 245800, "delta_pct": 12.0, "delta_direction": "up", "compare_to": "previous_month" },
+      "collected_this_month": { "value": 38420, "delta_pct": 8.0, "delta_direction": "up", "compare_to": "previous_month" },
+      "delinquent_clients":   { "value": 12, "delta_abs": 3, "delta_direction": "down", "compare_to": "previous_month" },
+      "credit_utilization":   { "value": 0.68, "delta_pct": -2.0, "delta_direction": "up", "compare_to": "previous_month", "unit": "ratio" }
+    },
+
+    "aging": {
+      "buckets": [
+        { "range": "0-30", "current": 85000, "overdue": 0 },
+        { "range": "31-60", "current": 24000, "overdue": 42000 },
+        { "range": "61-90", "current": 15500, "overdue": 28500 },
+        { "range": "90+", "current": 12000, "overdue": 18300 }
+      ]
+    },
+
+    "collections_vs_credits": {
+      "granularity": "month",
+      "series": [
+        { "period": "2026-01", "label": "Ene", "credits": 32000, "collections": 28000 },
+        { "period": "2026-06", "label": "Jun", "credits": 41000, "collections": 38420 }
+      ]
+    },
+
+    "delinquency_trend": {
+      "granularity": "month",
+      "series": [
+        { "period": "2026-01", "label": "Ene", "overdue": 22000 },
+        { "period": "2026-06", "label": "Jun", "overdue": 32800 }
+      ]
+    },
+
+    "client_distribution": {
+      "total": 61800,
+      "items": [
+        { "client_id": "cli_01", "name": "Comercial El Rey", "value": 18500, "percent": 0.299 },
+        { "client_id": null, "name": "Otros", "value": 15900, "percent": 0.257, "is_aggregate": true }
+      ]
+    },
+
+    "top_delinquents": {
+      "items": [
+        {
+          "client_id": "cli_07",
+          "name": "Comercial El Rey",
+          "overdue_amount": 12450,
+          "days_overdue": 45,
+          "invoices_count": 3,
+          "status": "delinquent"
+        }
+      ]
+    }
+  }
+}
+```
+
+**Metrics Fields:**
+
+| Section | Field | Type | Description |
+|---------|-------|------|-------------|
+| (root) | `as_of` | string | Reference date for metrics (YYYY-MM-DD) |
+| (root) | `range` | string | Time range for historical data |
+| (root) | `currency` | string | Currency code (from organization settings) |
+| (root) | `timezone` | string | Timezone for date calculations |
+| (root) | `generated_at` | string | ISO 8601 timestamp when metrics were generated |
+| `kpis.credit_notes_this_month` | `value` | number | Total credit notes amount this month |
+| `kpis.collected_this_month` | `value` | number | Amount collected in current month |
+| `kpis.delinquent_clients` | `value` | number | Number of delinquent clients |
+| `kpis.credit_utilization` | `value` | number | Credit utilization ratio (0-1) |
+| `kpis.*` | `delta_pct` | number | Percentage change vs comparison period |
+| `kpis.*` | `delta_direction` | string | `up` or `down` |
+| `aging.buckets` | `range` | string | Days range (0-30, 31-60, 61-90, 90+) |
+| `aging.buckets` | `current` | number | Current (not overdue) amount in bucket |
+| `aging.buckets` | `overdue` | number | Overdue amount in bucket |
+| `collections_vs_credits.series` | `period` | string | Month (YYYY-MM) |
+| `collections_vs_credits.series` | `credits` | number | Credit notes created in period |
+| `collections_vs_credits.series` | `collections` | number | Payments collected in period |
+| `delinquency_trend.series` | `overdue` | number | Total overdue amount at end of period |
+| `client_distribution.items` | `client_id` | string | Client UUID (null for "Others" aggregate) |
+| `client_distribution.items` | `value` | number | Outstanding amount for client |
+| `client_distribution.items` | `percent` | number | Percentage of total portfolio |
+| `top_delinquents.items` | `overdue_amount` | number | Total overdue amount |
+| `top_delinquents.items` | `days_overdue` | number | Max days past due |
+| `top_delinquents.items` | `invoices_count` | number | Number of overdue invoices |
+
+**Error Responses:**
+
+- **400 Bad Request**: Missing orgId
+- **400 Bad Request**: Invalid as_of date format (expected YYYY-MM-DD)
 
 ---
 
@@ -2737,7 +2924,7 @@ All endpoints return standardized JSON error responses:
 ### Credit Note Validation Rules
 
 - **clientId**: Required, must be a valid UUID referencing an existing Client
-- **invoiceNumber**: Required, non-empty string
+- **invoiceNumber**: Optional, non-empty string
 - **amount**: Required, positive number (> 0)
 - **status**: Optional, one of: `pending`, `partial`, `paid`, `overdue` (default: `pending`)
 - **dueDate**: Required, valid ISO 8601 date string
@@ -2748,7 +2935,7 @@ All endpoints return standardized JSON error responses:
 
 - **creditNoteId**: Required, must reference an existing Credit Note
 - **clientId**: Required, must be a valid UUID referencing an existing Client
-- **invoiceNumber**: Required, non-empty string
+- **invoiceNumber**: Optional (inherited from Credit Note if not provided)
 - **amount**: Required, positive number (> 0)
 - **method**: Required, one of: `cash`, `bank_transfer`, `mobile_payment`, `credit_card`, `other`
 - **status**: Optional, one of: `confirmed`, `pending`, `rejected` (default: `pending`)

@@ -6,6 +6,7 @@ import {
   TransactWriteCommand,
   UpdateCommand,
   QueryCommand,
+  BatchGetCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { Payment, PaymentRecord, CreatePaymentInput, UpdatePaymentInput, ListPaymentsParams } from './types';
 import * as clientRepo from '../clients/repository';
@@ -30,7 +31,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
  * Strip internal DynamoDB fields (PK, SK, GSI fields, numberLower) before returning to callers.
  */
 function toPayment(record: Record<string, unknown>): Payment {
-  const { PK: _pk, SK: _sk, clientIdGSI: _cg, creditNoteIdGSI: _cng, statusGSI: _sg, methodGSI: _mg, numberLower: _nl, ...rest } = record as unknown as PaymentRecord;
+  const { PK: _pk, SK: _sk, clientIdGSI: _cg, creditNoteIdGSI: _cng, statusGSI: _sg, methodGSI: _mg, numberLower: _nl, creditNoteNumberLower: _cnnl, ...rest } = record as unknown as PaymentRecord;
   return rest as Payment;
 }
 
@@ -75,7 +76,24 @@ export async function getPaymentById(orgId: string, paymentId: string): Promise<
       Key: { PK: `org#${orgId}`, SK: `payment#${paymentId}` },
     }),
   );
-  return result.Item ? toPayment(result.Item) : null;
+  if (!result.Item) return null;
+  
+  const payment = toPayment(result.Item);
+  
+  // Enrich with creditNoteNumber if missing (for payments created before this field existed)
+  if (!payment.creditNoteNumber && payment.creditNoteId) {
+    const creditNoteResult = await ddb.send(
+      new GetCommand({
+        TableName: CREDIT_NOTES_TABLE,
+        Key: { PK: `org#${orgId}`, SK: `creditnote#${payment.creditNoteId}` },
+      }),
+    );
+    if (creditNoteResult.Item) {
+      payment.creditNoteNumber = creditNoteResult.Item.number as string;
+    }
+  }
+  
+  return payment;
 }
 
 export async function listPayments(params: ListPaymentsParams): Promise<{ items: Payment[]; total: number }> {
@@ -109,7 +127,7 @@ export async function listPayments(params: ListPaymentsParams): Promise<{ items:
   }
 
   if (params.search) {
-    filterParts.push('(contains(numberLower, :search) OR contains(clientName, :search) OR contains(invoiceNumber, :search))');
+    filterParts.push('(contains(numberLower, :search) OR contains(clientName, :search) OR contains(invoiceNumber, :search) OR contains(creditNoteNumberLower, :search))');
     exprValues[':search'] = params.search.toLowerCase();
   }
 
@@ -132,6 +150,41 @@ export async function listPayments(params: ListPaymentsParams): Promise<{ items:
     }
     lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (lastKey);
+
+  // Enrich payments missing creditNoteNumber (for payments created before this field existed)
+  const paymentsNeedingEnrichment = allItems.filter(p => !p.creditNoteNumber && p.creditNoteId);
+  if (paymentsNeedingEnrichment.length > 0) {
+    // Get unique credit note IDs
+    const creditNoteIds = [...new Set(paymentsNeedingEnrichment.map(p => p.creditNoteId))];
+    
+    // Batch get credit notes (max 100 per batch)
+    const creditNoteMap = new Map<string, string>();
+    for (let i = 0; i < creditNoteIds.length; i += 100) {
+      const batch = creditNoteIds.slice(i, i + 100);
+      const keys = batch.map(id => ({ PK: `org#${params.orgId}`, SK: `creditnote#${id}` }));
+      
+      const batchResult = await ddb.send(new BatchGetCommand({
+        RequestItems: {
+          [CREDIT_NOTES_TABLE]: { Keys: keys },
+        },
+      }));
+      
+      for (const item of batchResult.Responses?.[CREDIT_NOTES_TABLE] ?? []) {
+        const noteId = (item.SK as string).replace('creditnote#', '');
+        creditNoteMap.set(noteId, item.number as string);
+      }
+    }
+    
+    // Apply creditNoteNumber to payments
+    for (const payment of allItems) {
+      if (!payment.creditNoteNumber && payment.creditNoteId) {
+        const creditNoteNumber = creditNoteMap.get(payment.creditNoteId);
+        if (creditNoteNumber) {
+          payment.creditNoteNumber = creditNoteNumber;
+        }
+      }
+    }
+  }
 
   // In-memory sort
   const field = params.sortBy as keyof Payment;
@@ -195,7 +248,11 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
   }
 
   const newPaid = currentPaid + input.amount;
-  const newStatus = newPaid >= (creditNote.amount as number) ? 'paid' : 'partial';
+  // If fully paid, status is 'paid'. Otherwise, keep 'overdue' if it was overdue, else 'partial'
+  const currentStatus = creditNote.status as string;
+  const newStatus = newPaid >= (creditNote.amount as number) 
+    ? 'paid' 
+    : (currentStatus === 'overdue' ? 'overdue' : 'partial');
 
   // Generate or use provided number
   let paymentNumber = input.number;
@@ -207,6 +264,8 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
   // Calculate the accumulated debt AFTER this payment is processed
   const clientAccumulatedDebtAfterPayment = client.accumulatedDebt - input.amount;
 
+  const creditNoteNumber = creditNote.number as string;
+
   const record: PaymentRecord = {
     PK: `org#${orgId}`,
     SK: `payment#${paymentId}`,
@@ -216,10 +275,12 @@ export async function createPayment(orgId: string, input: CreatePaymentInput): P
     numberLower: paymentNumber.toLowerCase(),
     creditNoteId: input.creditNoteId,
     creditNoteIdGSI: input.creditNoteId,
+    creditNoteNumber,
+    creditNoteNumberLower: creditNoteNumber.toLowerCase(),
     clientId: input.clientId,
     clientIdGSI: input.clientId,
     clientName: client.name,
-    invoiceNumber: creditNote.invoiceNumber as string,
+    invoiceNumber: creditNote.invoiceNumber as string | undefined,
     amount: input.amount,
     method: input.method,
     methodGSI: input.method,
@@ -488,8 +549,23 @@ export async function deletePayment(orgId: string, paymentId: string): Promise<b
       if (creditNoteResult.Item) {
         const creditNoteAmount = Number(creditNoteResult.Item.amount ?? 0);
         const currentPaid = Number(creditNoteResult.Item.paid ?? 0);
+        const currentStatus = creditNoteResult.Item.status as string;
+        const dueDate = creditNoteResult.Item.dueDate as string;
         const newPaid = Math.max(0, currentPaid - amount);
-        const newStatus = newPaid <= 0 ? 'pending' : newPaid >= creditNoteAmount ? 'paid' : 'partial';
+        
+        // Determine new status: if fully paid, 'paid'. Otherwise check if overdue by date or current status
+        let newStatus: string;
+        if (newPaid >= creditNoteAmount) {
+          newStatus = 'paid';
+        } else if (newPaid <= 0) {
+          // No payments - check if overdue by date
+          const isOverdue = dueDate && new Date(dueDate) < new Date();
+          newStatus = isOverdue ? 'overdue' : 'pending';
+        } else {
+          // Partial payment - keep overdue if it was overdue or if date has passed
+          const isOverdue = currentStatus === 'overdue' || (dueDate && new Date(dueDate) < new Date());
+          newStatus = isOverdue ? 'overdue' : 'partial';
+        }
 
         creditNoteUpdate = {
           Update: {

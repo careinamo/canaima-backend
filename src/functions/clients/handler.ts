@@ -138,7 +138,7 @@ export const createClient = async (
 
     // Log audit event (await to ensure it completes before Lambda freezes)
     console.log('[CLIENTS] About to call logAuditEventSync for CREATE client:', client.id);
-    await logAuditEventSync(event, 'CREATE', 'client', client.id, client.name, {
+    await logAuditEventSync(event, 'CREATE', 'client', client.id, client.name, undefined, {
       email: client.email,
       phone: client.phone,
       creditLimit: client.creditLimit,
@@ -189,7 +189,7 @@ export const updateClient = async (
     if (!client) return clientError(404, 'Client not found');
 
     // Log audit event
-    await logAuditEventSync(event, 'UPDATE', 'client', client.id, client.name, {
+    await logAuditEventSync(event, 'UPDATE', 'client', client.id, client.name, undefined, {
       updatedFields: Object.keys(input),
     });
 
@@ -222,7 +222,7 @@ export const deleteClient = async (
     if (!deleted) return clientError(404, 'Client not found');
 
     // Log audit event
-    await logAuditEventSync(event, 'DELETE', 'client', id);
+    await logAuditEventSync(event, 'DELETE', 'client', id, undefined, undefined);
 
     return respond(200, { success: true, message: 'Client deleted' });
   } catch (error) {
@@ -267,7 +267,7 @@ export const bulkImportClients = async (
 
     // Log audit event for bulk import
     if (result.created.length > 0) {
-      await logAuditEventSync(event, 'CREATE', 'client', 'bulk-import', undefined, {
+      await logAuditEventSync(event, 'CREATE', 'client', 'bulk-import', undefined, undefined, {
         createdCount: result.created.length,
         failedCount: result.errors.length,
         clientIds: result.created.map(c => c.id),

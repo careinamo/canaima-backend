@@ -14,16 +14,26 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
 const CLIENT_TABLE = process.env.TABLE_CLIENTS as string;
 const METRICS_TABLE = process.env.TABLE_METRICS as string;
 
+console.log('[DelinquentMetrics] Module loaded. CLIENT_TABLE:', CLIENT_TABLE, 'METRICS_TABLE:', METRICS_TABLE);
+
 /**
- * Update the delinquent clients count metric for an organization
+ * Update the daily delinquent clients count metric for an organization
  * Queries all clients and counts how many are marked as delinquent
- * Also gathers additional context metrics
+ * Stores the metric with SK as YYYY-MM-DD (daily)
  */
 export async function updateDelinquentClientsMetrics(orgId: string, date: Date = new Date()): Promise<void> {
+  console.log(`[DelinquentMetrics] Function called for org ${orgId}`);
+  console.log(`[DelinquentMetrics] METRICS_TABLE value: "${METRICS_TABLE}"`);
+  
+  if (!METRICS_TABLE) {
+    console.error('[DelinquentMetrics] ERROR: METRICS_TABLE is not defined!');
+    return;
+  }
+
   try {
-    console.log(`Tumadre Updating delinquent clients metrics for org ${orgId} on date ${date.toISOString()}`);
-    // Format date as YYYY-MM-DD for the SK
-    const dateString = date.toISOString().split('T')[0]; // e.g., "2026-05-30"
+    // Format date as YYYY-MM-DD for daily SK
+    const dateString = date.toISOString().slice(0, 10); // e.g., "2026-06-13"
+    console.log(`Updating daily delinquent clients metrics for org ${orgId}, date ${dateString}`);
 
     // Query all clients for this org
     const pk = `org#${orgId}`;
@@ -55,7 +65,7 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
     let totalCreditLimit = 0;
 
     for (const client of allClients) {
-      const isActive = (client.status as string) === 'active' || client.status === undefined;
+      const isActive = (client.active as boolean) !== false; // Default to active if not set
       const isDelinquent = (client.delinquent as boolean) === true;
 
       if (isActive) {
@@ -70,102 +80,132 @@ export async function updateDelinquentClientsMetrics(orgId: string, date: Date =
       totalCreditLimit += Number(client.creditLimit ?? 0);
     }
 
-    // Check if value has changed since yesterday to decide if we need to copy
-    const yesterday = new Date(date);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayString = yesterday.toISOString().split('T')[0];
+    // Update/create the daily metrics record
+    console.log(`[DelinquentMetrics] About to save: delinquentCount=${delinquentCount}`);
+    console.log(`[DelinquentMetrics] Saving to table: ${METRICS_TABLE}, PK: DelinquentClientsTotal#${orgId}, SK: ${dateString}`);
 
-    const yesterdayMetricsKey = {
-      PK: `DelinquentClientsCount#${orgId}`,
-      SK: yesterdayString,
+    const metricsKey = {
+      PK: `DelinquentClientsTotal#${orgId}`,
+      SK: dateString,
     };
 
-    let yesterdayValue: number | undefined;
+    await ddb.send(
+      new UpdateCommand({
+        TableName: METRICS_TABLE,
+        Key: metricsKey,
+        UpdateExpression:
+          'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #createdAt = if_not_exists(#createdAt, :createdAt), #updatedAt = :updatedAt, orgId = :orgId',
+        ExpressionAttributeNames: {
+          '#value': 'value',
+          '#activeClientsCount': 'activeClientsCount',
+          '#totalAccumulatedDebt': 'totalAccumulatedDebt',
+          '#totalCreditLimit': 'totalCreditLimit',
+          '#createdAt': 'createdAt',
+          '#updatedAt': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':value': delinquentCount,
+          ':activeClientsCount': activeClientsCount,
+          ':totalAccumulatedDebt': totalAccumulatedDebt,
+          ':totalCreditLimit': totalCreditLimit,
+          ':createdAt': getCurrentTimestampInTimezone(),
+          ':updatedAt': getCurrentTimestampInTimezone(),
+          ':orgId': orgId,
+        },
+      }),
+    );
 
-    try {
-      const yesterdayResult = await ddb.send(
-        new GetCommand({
-          TableName: METRICS_TABLE,
-          Key: yesterdayMetricsKey,
-        }),
-      );
-
-      yesterdayValue = (yesterdayResult.Item?.value as number) || undefined;
-    } catch (e) {
-      // Yesterday's record doesn't exist, that's ok
-    }
-
-    // If value hasn't changed and yesterday exists, just copy yesterday's record to today
-    if (yesterdayValue !== undefined && yesterdayValue === delinquentCount) {
-      console.log(
-        `Delinquent clients count unchanged (${delinquentCount}). Copying yesterday's record.`,
-      );
-
-      const today = dateString;
-      const metricsKey = {
-        PK: `DelinquentClientsCount#${orgId}`,
-        SK: today,
-      };
-
-      await ddb.send(
-        new UpdateCommand({
-          TableName: METRICS_TABLE,
-          Key: metricsKey,
-          UpdateExpression:
-            'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #updatedAt = :updatedAt',
-          ExpressionAttributeNames: {
-            '#value': 'value',
-            '#activeClientsCount': 'activeClientsCount',
-            '#totalAccumulatedDebt': 'totalAccumulatedDebt',
-            '#totalCreditLimit': 'totalCreditLimit',
-            '#updatedAt': 'updatedAt',
-          },
-          ExpressionAttributeValues: {
-            ':value': delinquentCount,
-            ':activeClientsCount': activeClientsCount,
-            ':totalAccumulatedDebt': totalAccumulatedDebt,
-            ':totalCreditLimit': totalCreditLimit,
-            ':updatedAt': getCurrentTimestampInTimezone(),
-          },
-        }),
-      );
-    } else {
-      // Value has changed or it's the first day, create/update the record
-      console.log(`Delinquent clients count updated: ${delinquentCount}`);
-
-      const metricsKey = {
-        PK: `DelinquentClientsCount#${orgId}`,
-        SK: dateString,
-      };
-
-      await ddb.send(
-        new UpdateCommand({
-          TableName: METRICS_TABLE,
-          Key: metricsKey,
-          UpdateExpression:
-            'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #createdAt = if_not_exists(#createdAt, :createdAt), #updatedAt = :updatedAt, orgId = :orgId',
-          ExpressionAttributeNames: {
-            '#value': 'value',
-            '#activeClientsCount': 'activeClientsCount',
-            '#totalAccumulatedDebt': 'totalAccumulatedDebt',
-            '#totalCreditLimit': 'totalCreditLimit',
-            '#createdAt': 'createdAt',
-            '#updatedAt': 'updatedAt',
-          },
-          ExpressionAttributeValues: {
-            ':value': delinquentCount,
-            ':activeClientsCount': activeClientsCount,
-            ':totalAccumulatedDebt': totalAccumulatedDebt,
-            ':totalCreditLimit': totalCreditLimit,
-            ':createdAt': getCurrentTimestampInTimezone(),
-            ':updatedAt': getCurrentTimestampInTimezone(),
-            ':orgId': orgId,
-          },
-        }),
-      );
-    }
+    console.log(`[DelinquentMetrics] Successfully updated daily delinquent clients metrics for org ${orgId}`);
   } catch (error) {
-    console.error('Error updating delinquent clients metrics:', error);
+    console.error('[DelinquentMetrics] Error updating daily delinquent clients metrics:', error);
+    console.error('[DelinquentMetrics] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     // Don't throw - this is a non-critical operation
+  }
+}
+
+/**
+ * Copy delinquent clients metric from previous day if today's record doesn't exist
+ * Called by the scheduled handler (every 24 hours) to ensure continuity
+ */
+export async function copyDelinquentMetricsFromPreviousDay(orgId: string, date: Date = new Date()): Promise<{
+  copied: boolean;
+  reason: string;
+}> {
+  console.log(`[DelinquentMetrics] Checking if copy from previous day is needed for org ${orgId}`);
+  
+  if (!METRICS_TABLE) {
+    console.error('[DelinquentMetrics] ERROR: METRICS_TABLE is not defined!');
+    return { copied: false, reason: 'METRICS_TABLE not defined' };
+  }
+
+  try {
+    const dateString = date.toISOString().slice(0, 10); // e.g., "2026-06-13"
+    const pk = `DelinquentClientsTotal#${orgId}`;
+
+    // Check if today's record already exists
+    const todayResult = await ddb.send(
+      new GetCommand({
+        TableName: METRICS_TABLE,
+        Key: { PK: pk, SK: dateString },
+      }),
+    );
+
+    if (todayResult.Item) {
+      console.log(`[DelinquentMetrics] Today's record already exists for ${dateString}, skipping copy`);
+      return { copied: false, reason: 'Today record already exists' };
+    }
+
+    // Get previous day's record
+    const previousDay = new Date(date);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousDateString = previousDay.toISOString().slice(0, 10);
+
+    const previousDayResult = await ddb.send(
+      new GetCommand({
+        TableName: METRICS_TABLE,
+        Key: { PK: pk, SK: previousDateString },
+      }),
+    );
+
+    if (!previousDayResult.Item) {
+      console.log(`[DelinquentMetrics] No previous day record found for ${previousDateString}, nothing to copy`);
+      return { copied: false, reason: 'No previous day record exists' };
+    }
+
+    // Copy previous day's record to today with same value
+    const previousRecord = previousDayResult.Item;
+    console.log(`[DelinquentMetrics] Copying previous day record to ${dateString}, value: ${previousRecord.value}`);
+
+    await ddb.send(
+      new UpdateCommand({
+        TableName: METRICS_TABLE,
+        Key: { PK: pk, SK: dateString },
+        UpdateExpression:
+          'SET #value = :value, #activeClientsCount = :activeClientsCount, #totalAccumulatedDebt = :totalAccumulatedDebt, #totalCreditLimit = :totalCreditLimit, #createdAt = :createdAt, #updatedAt = :updatedAt, orgId = :orgId',
+        ExpressionAttributeNames: {
+          '#value': 'value',
+          '#activeClientsCount': 'activeClientsCount',
+          '#totalAccumulatedDebt': 'totalAccumulatedDebt',
+          '#totalCreditLimit': 'totalCreditLimit',
+          '#createdAt': 'createdAt',
+          '#updatedAt': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':value': previousRecord.value,
+          ':activeClientsCount': previousRecord.activeClientsCount ?? 0,
+          ':totalAccumulatedDebt': previousRecord.totalAccumulatedDebt ?? 0,
+          ':totalCreditLimit': previousRecord.totalCreditLimit ?? 0,
+          ':createdAt': getCurrentTimestampInTimezone(),
+          ':updatedAt': getCurrentTimestampInTimezone(),
+          ':orgId': orgId,
+        },
+      }),
+    );
+
+    console.log(`[DelinquentMetrics] Successfully copied previous day metrics to ${dateString}`);
+    return { copied: true, reason: 'Copied from previous day' };
+  } catch (error) {
+    console.error('[DelinquentMetrics] Error copying previous day metrics:', error);
+    return { copied: false, reason: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

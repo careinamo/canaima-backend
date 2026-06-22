@@ -88,7 +88,7 @@ export async function createOrganization(
     });
 
     // Log audit event
-    await logAuditEventSync(event, 'CREATE', 'organization', org.clerkOrgId, org.name, {
+    await logAuditEventSync(event, 'CREATE', 'organization', org.clerkOrgId, org.name, undefined, {
       teamSize: org.teamSize,
       currency: org.currency,
     });
@@ -134,7 +134,7 @@ export async function updateOrganization(
     const org = await repo.updateOrg(clerkOrgId, validated);
 
     // Log audit event
-    await logAuditEventSync(event, 'UPDATE', 'organization', clerkOrgId, org?.name, {
+    await logAuditEventSync(event, 'UPDATE', 'organization', clerkOrgId, org?.name, undefined, {
       updatedFields: Object.keys(validated),
     });
 
@@ -254,7 +254,7 @@ export async function completeOnboarding(
     });
 
     // Log audit event
-    await logAuditEventSync(event, 'UPDATE', 'organization', clerkOrgId, validated.name, {
+    await logAuditEventSync(event, 'UPDATE', 'organization', clerkOrgId, validated.name, undefined, {
       action: 'complete-onboarding',
       teamSize: validated.teamSize,
     });

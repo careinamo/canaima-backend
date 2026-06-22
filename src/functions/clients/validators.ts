@@ -38,12 +38,27 @@ export function validateCreateClient(body: unknown): CreateClientInput {
     throw new ValidationError('creditLimit must be a non-negative number');
   }
 
+  let accumulatedDebt: number | undefined;
+  if (input.accumulatedDebt !== undefined) {
+    const debt = Number(input.accumulatedDebt);
+    if (isNaN(debt) || debt < 0) {
+      throw new ValidationError('accumulatedDebt must be a non-negative number');
+    }
+    // Validate that accumulatedDebt does not exceed creditLimit
+    if (debt > creditLimit) {
+      throw new ValidationError('accumulatedDebt cannot exceed creditLimit');
+    }
+    accumulatedDebt = debt;
+  }
+
   return {
     name: String(input.name).trim(),
+    document: input.document ? String(input.document).trim() : undefined,
     email,
     active,
     delinquent,
     creditLimit,
+    accumulatedDebt,
     phone: input.phone ? String(input.phone).trim() : undefined,
     address: input.address ? String(input.address).trim() : undefined,
     notes: input.notes ? String(input.notes).trim() : undefined,
@@ -106,6 +121,7 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
     result.accumulatedDebt = debt;
   }
 
+  if ('document' in input) result.document = input.document ? String(input.document).trim() : undefined;
   if ('phone' in input) result.phone = input.phone ? String(input.phone).trim() : undefined;
   if ('address' in input) result.address = input.address ? String(input.address).trim() : undefined;
   if ('notes' in input) result.notes = input.notes ? String(input.notes).trim() : undefined;
@@ -138,10 +154,13 @@ export function parseCsvClients(csvContent: string): CsvParseResult {
   }
 
   const headerLine = lines[0];
-  const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
+  // Parse headers: trim and keep original case (not lowercase)
+  // For case-insensitive matching, we'll normalize to lowercase for validation but use original keys
+  const headersRaw = headerLine.split(',').map(h => h.trim());
+  const headersLower = headersRaw.map(h => h.toLowerCase());
   
   // Validate header - only 'name' is required
-  if (!headers.includes('name')) {
+  if (!headersLower.includes('name')) {
     throw new ValidationError('CSV must include \'name\' column');
   }
 
@@ -160,8 +179,9 @@ export function parseCsvClients(csvContent: string): CsvParseResult {
     const cells = line.split(',').map(cell => cell.trim());
     const row: Record<string, string> = {};
 
-    for (let j = 0; j < headers.length; j++) {
-      row[headers[j]] = cells[j] || '';
+    // Map cells to headers using original header names (preserves camelCase)
+    for (let j = 0; j < headersRaw.length; j++) {
+      row[headersRaw[j]] = cells[j] || '';
     }
 
     try {

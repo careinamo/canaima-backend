@@ -6,9 +6,10 @@ export interface Payment {
   orgId: string;
   number: string;
   creditNoteId: string;
+  creditNoteNumber: string;
   clientId: string;
   clientName: string;
-  invoiceNumber: string;
+  invoiceNumber?: string;
   amount: number;
   method: PaymentMethod;
   status: PaymentStatus;
@@ -30,6 +31,7 @@ export interface PaymentRecord extends Payment {
   statusGSI: PaymentStatus;
   methodGSI: PaymentMethod;
   numberLower: string;
+  creditNoteNumberLower: string;
 }
 
 export interface CreatePaymentInput {

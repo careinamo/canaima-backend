@@ -24,6 +24,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 | **Organization** | Organización/empresa multi-tenant |
 | **User** | Usuario del sistema (sync con Clerk) |
 | **AuditLog** | Registro de auditoría de cambios |
+| **DashboardMetrics** | Métricas agregadas para dashboard |
 
 ---
 
@@ -37,7 +38,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 ```json
 // Response 200
 {
-  "data": [{ "id": "", "name": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true }],
+  "data": [{ "id": "", "name": "", "document": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true }],
   "pagination": { "page": 1, "limit": 20, "totalPages": 1, "totalCount": 1 }
 }
 ```
@@ -45,21 +46,21 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### GET `/clients/{id}` - Obtener cliente
 ```json
 // Response 200
-{ "id": "", "name": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "notes": "", "createdAt": "", "updatedAt": "" }
+{ "id": "", "name": "", "document": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "notes": "", "createdAt": "", "updatedAt": "" }
 ```
 
 #### POST `/clients` - Crear cliente
 ```json
 // Request
-{ "name": "required", "email": "optional", "phone": "", "address": "", "creditLimit": 0, "notes": "" }
+{ "name": "required", "document": "optional", "email": "optional", "phone": "", "address": "", "creditLimit": 0, "notes": "" }
 // Response 201
-{ "id": "", "name": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "createdAt": "", "updatedAt": "" }
+{ "id": "", "name": "", "document": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "createdAt": "", "updatedAt": "" }
 ```
 
 #### PUT `/clients/{id}` - Actualizar cliente
 ```json
 // Request (todos opcionales)
-{ "name": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "active": true, "delinquent": false, "notes": "" }
+{ "name": "", "document": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "active": true, "delinquent": false, "notes": "" }
 // Response 200: mismo formato que GET
 ```
 
@@ -92,7 +93,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### POST `/credit-notes` - Crear nota
 ```json
 // Request
-{ "clientId": "required", "invoiceNumber": "required", "amount": "required > 0", "dueDate": "required ISO8601", "description": "", "status": "pending" }
+{ "clientId": "required", "invoiceNumber": "optional", "amount": "required > 0", "dueDate": "required ISO8601", "description": "", "status": "pending" }
 // Response 201
 { "id": "", "number": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "paid": 0, "status": "pending", "dueDate": "", "clientAccumulatedDebtAtRecord": 0, "createdAt": "", "updatedAt": "" }
 // Error 400 - Límite excedido
@@ -110,6 +111,8 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 ```json
 // Response 200
 { "success": true, "message": "Credit note deleted" }
+// Error 409 - Tiene pagos asociados
+{ "error": "Cannot delete credit note with associated payments", "code": "HAS_ASSOCIATED_PAYMENTS", "message": "Esta nota de crédito tiene pagos asociados. Debe eliminar los pagos primero antes de eliminar la nota de crédito." }
 ```
 > ⚡ **Side effect:** Recalcula `client.delinquent` automáticamente
 
@@ -122,7 +125,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 ```json
 // Response 200
 {
-  "data": [{ "id": "", "number": "AB-001", "creditNoteId": "", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "" }],
+  "data": [{ "id": "", "number": "AB-001", "creditNoteId": "", "creditNoteNumber": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "" }],
   "pagination": { "page": 1, "limit": 10, "totalPages": 1, "totalCount": 1 }
 }
 ```
@@ -130,15 +133,15 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### GET `/payments/{id}` - Obtener pago
 ```json
 // Response 200
-{ "id": "", "number": "AB-001", "orgId": "", "creditNoteId": "", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "", "description": "", "clientAccumulatedDebtAtRecord": 0, "clientCreditLimitAtRecord": 0, "createdAt": "", "updatedAt": "" }
+{ "id": "", "number": "AB-001", "orgId": "", "creditNoteId": "", "creditNoteNumber": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "bankName": "", "reference": "", "description": "", "clientAccumulatedDebtAtRecord": 0, "clientCreditLimitAtRecord": 0, "createdAt": "", "updatedAt": "" }
 ```
 
 #### POST `/payments` - Crear pago
 ```json
 // Request
-{ "creditNoteId": "required", "clientId": "required", "invoiceNumber": "required", "amount": "required > 0", "method": "required: cash|bank_transfer|mobile_payment|credit_card|other", "status": "pending", "bankName": "", "reference": "", "description": "" }
+{ "creditNoteId": "required", "clientId": "required", "amount": "required > 0", "method": "required: cash|bank_transfer|mobile_payment|credit_card|other", "status": "pending", "bankName": "", "reference": "", "description": "" }
 // Response 201
-{ "id": "", "number": "AB-001", "creditNoteId": "", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "clientAccumulatedDebtAtRecord": 0, "createdAt": "", "updatedAt": "" }
+{ "id": "", "number": "AB-001", "creditNoteId": "", "creditNoteNumber": "NC-001", "clientId": "", "clientName": "", "invoiceNumber": "", "amount": 0, "method": "bank_transfer", "status": "pending", "clientAccumulatedDebtAtRecord": 0, "createdAt": "", "updatedAt": "" }
 // Error 400 - Excede balance
 { "error": "Payment amount 2000 exceeds credit note remaining balance 1000" }
 ```
@@ -165,14 +168,14 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 **Content-Type:** `text/plain`
 **Max:** 50 filas
 ```csv
-name,email,phone,address,active,delinquent,creditLimit,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
+name,document,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
+Acme Corp,J123456789,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
 ```
 ```json
 // Response 202
 {
   "summary": { "total": 2, "successful": 2, "failed": 0 },
-  "created": [{ "id": "", "name": "", "email": "" }],
+  "created": [{ "id": "", "name": "", "document": "", "email": "" }],
   "errors": []
 }
 // Con errores parciales
@@ -267,6 +270,32 @@ Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
 {
   "data": [{ "orgId": "", "eventId": "", "userId": "", "userName": "John Doe", "userEmail": "john@example.com", "action": "CREATE", "resourceType": "client", "resourceId": "", "resourceName": "", "timestamp": "", "ipAddress": "", "metadata": {} }],
   "pagination": { "page": 1, "limit": 50, "totalPages": 1, "totalCount": 1, "hasMore": false }
+}
+```
+
+---
+
+### Dashboard Metrics `/orgs/{orgId}/dashboard-metrics`
+
+#### GET `/dashboard-metrics` - Métricas del dashboard
+**Query:** `?as_of=2026-06-15`
+> Métricas agregadas para alimentar dashboards. `as_of` es opcional (default: hoy).
+```json
+// Response 200
+{
+  "data": {
+    "as_of": "2026-06-15",
+    "range": "6m",
+    "currency": "USD",
+    "timezone": "America/Caracas",
+    "generated_at": "2026-06-15T14:32:10Z",
+    "kpis": { "credit_notes_this_month": {...}, "collected_this_month": {...}, "delinquent_clients": {...}, "credit_utilization": {...} },
+    "aging": { "buckets": [...] },
+    "collections_vs_credits": { "granularity": "month", "series": [...] },
+    "delinquency_trend": { "granularity": "month", "series": [...] },
+    "client_distribution": { "total": 0, "items": [...] },
+    "top_delinquents": { "items": [...] }
+  }
 }
 ```
 
@@ -440,7 +469,7 @@ sequenceDiagram
 - `clientId` - Filtrar por cliente
 
 **Payments:**
-- `search` - Busca en number, clientName, invoiceNumber
+- `search` - Busca en number, clientName, invoiceNumber, creditNoteNumber
 - `status` - `confirmed` / `pending` / `rejected`
 - `method` - `cash` / `bank_transfer` / `mobile_payment` / `credit_card` / `other`
 - `clientId` - Filtrar por cliente
@@ -505,6 +534,7 @@ erDiagram
     CLIENT {
         string id PK
         string name
+        string document
         string email UK
         number creditLimit
         number accumulatedDebt
@@ -527,6 +557,7 @@ erDiagram
         string id PK
         string clientId FK
         string creditNoteId FK
+        string creditNoteNumber
         string number UK
         number amount
         string method

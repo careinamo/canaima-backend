@@ -143,6 +143,7 @@ export async function createClient(orgId: string, input: CreateClientInput): Pro
     orgId,
     name: input.name,
     nameLower: input.name.toLowerCase(),
+    document: input.document,
     email: input.email,
     emailLower: input.email ? input.email.toLowerCase() : undefined,
     phone: input.phone,
@@ -150,7 +151,7 @@ export async function createClient(orgId: string, input: CreateClientInput): Pro
     active: input.active,
     delinquent: input.delinquent ?? false,
     creditLimit: input.creditLimit,
-    accumulatedDebt: 0,
+    accumulatedDebt: input.accumulatedDebt ?? 0,
     notes: input.notes,
     createdAt: now,
     updatedAt: now,
@@ -207,6 +208,7 @@ export async function createClientsBatch(
         orgId,
         name: input.name,
         nameLower: input.name.toLowerCase(),
+        document: input.document,
         email: input.email,
         emailLower: input.email ? input.email.toLowerCase() : undefined,
         phone: input.phone,
@@ -214,7 +216,7 @@ export async function createClientsBatch(
         active: input.active,
         delinquent: input.delinquent ?? false,
         creditLimit: input.creditLimit,
-        accumulatedDebt: 0,
+        accumulatedDebt: input.accumulatedDebt ?? 0,
         notes: input.notes,
         createdAt: now,
         updatedAt: now,
@@ -282,7 +284,7 @@ export async function updateClient(orgId: string, clientId: string, input: Updat
     values[':accumulatedDebt'] = input.accumulatedDebt;
   }
 
-  for (const field of ['phone', 'address', 'notes'] as const) {
+  for (const field of ['document', 'phone', 'address', 'notes'] as const) {
     if (field in input) {
       if (input[field] !== undefined) {
         sets.push(`#${field} = :${field}`);

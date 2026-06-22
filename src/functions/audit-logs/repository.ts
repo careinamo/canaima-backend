@@ -50,6 +50,7 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<AuditL
     action: input.action,
     resourceType: input.resourceType,
     resourceId: input.resourceId,
+    resourceNumber: input.resourceNumber,
     resourceName: input.resourceName,
     timestamp,
     ipAddress: input.ipAddress,

@@ -63,6 +63,7 @@ provider:
         - Effect: Allow
           Action:
             - dynamodb:GetItem
+            - dynamodb:BatchGetItem
             - dynamodb:PutItem
             - dynamodb:UpdateItem
             - dynamodb:DeleteItem
@@ -336,19 +337,20 @@ functions:
           authorizer:
             name: clerkAuthorizer
 
-  # ===== Credit Usage calculation =====
-  calculateCreditUsageScheduled:
-    handler: src/functions/credit-usage/handler.scheduleHandler
+  # ===== Credit Usage event-driven calculation =====
+  calculateCreditUsageEvent:
+    handler: src/functions/credit-usage/handler.eventDrivenHandler
+
+  # ===== Daily Metrics Processing (midnight Venezuela = 4 AM UTC) =====
+  dailyMetricsScheduled:
+    handler: src/functions/daily-metrics/handler.dailyMetricsHandler
     memorySize: 512
     timeout: 60
     events:
       - schedule:
-          rate: cron(0 0 * * ? *)
+          rate: cron(0 4 * * ? *)
           input:
             orgIds: ${env:ORG_IDS, 'org-default'}
-
-  calculateCreditUsageEvent:
-    handler: src/functions/credit-usage/handler.eventDrivenHandler
 
   # ===== Unified Metrics SQS Consumer =====
   calculateMetrics:
@@ -421,6 +423,16 @@ functions:
     events:
       - httpApi:
           path: /orgs/{orgId}/audit-logs
+          method: GET
+          authorizer:
+            name: clerkAuthorizer
+
+  # ===== Dashboard Metrics endpoint =====
+  getDashboardMetrics:
+    handler: src/functions/dashboard-metrics/handler.getDashboardMetrics
+    events:
+      - httpApi:
+          path: /orgs/{orgId}/dashboard-metrics
           method: GET
           authorizer:
             name: clerkAuthorizer

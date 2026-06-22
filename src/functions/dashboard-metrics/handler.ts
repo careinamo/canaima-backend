@@ -1,0 +1,122 @@
+import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { requireOrgAccess } from '../shared/auth';
+import { getCreditNotesThisMonthKPI, getCollectedThisMonthKPI, getDelinquentClientsKPI, getCreditUtilizationKPI, getAgingBuckets, getCollectionsVsCredits, getTopDelinquents, getClientDistribution } from './repository';
+
+// ---------------------------------------------------------------------------
+// Response helpers
+// ---------------------------------------------------------------------------
+
+const respond = (statusCode: number, body: unknown): APIGatewayProxyResultV2 => ({
+  statusCode,
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  },
+  body: JSON.stringify(body),
+});
+
+const clientError = (statusCode: number, message: string) =>
+  respond(statusCode, { error: message });
+
+const serverError = () => respond(500, { error: 'Internal server error' });
+
+// ---------------------------------------------------------------------------
+// GET /orgs/{orgId}/dashboard-metrics?as_of=YYYY-MM-DD
+// ---------------------------------------------------------------------------
+
+// Validate date format YYYY-MM-DD
+const isValidDateFormat = (dateStr: string): boolean => {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateStr)) return false;
+  const date = new Date(dateStr);
+  return !isNaN(date.getTime());
+};
+
+// Get today's date in YYYY-MM-DD format
+const getTodayDate = (): string => {
+  return new Date().toISOString().split('T')[0];
+};
+
+export const getDashboardMetrics = async (
+  event: APIGatewayProxyEventV2,
+): Promise<APIGatewayProxyResultV2> => {
+  try {
+    const orgId = event.pathParameters?.orgId;
+    if (!orgId) return clientError(400, 'Missing orgId');
+
+    // Validate user has access to this organization
+    const accessDenied = requireOrgAccess(event, orgId);
+    if (accessDenied) return accessDenied;
+
+    // Parse query parameters
+    const queryParams = event.queryStringParameters ?? {};
+    const asOfParam = queryParams.as_of;
+
+    // Validate as_of parameter if provided
+    let asOf: string;
+    if (asOfParam) {
+      if (!isValidDateFormat(asOfParam)) {
+        return clientError(400, 'Invalid as_of date format. Expected YYYY-MM-DD');
+      }
+      asOf = asOfParam;
+    } else {
+      // Default to today if not provided
+      asOf = getTodayDate();
+    }
+
+    // TODO: Aquí se agregarán las queries a DynamoDB para obtener las métricas reales
+    // Obtenemos las métricas reales de la tabla de métricas
+
+    // Fetch KPIs from DynamoDB
+    const creditNotesThisMonthKPI = await getCreditNotesThisMonthKPI(orgId, asOf);
+    const collectedThisMonthKPI = await getCollectedThisMonthKPI(orgId, asOf);
+    const delinquentClientsKPI = await getDelinquentClientsKPI(orgId, asOf);
+    const creditUtilizationKPI = await getCreditUtilizationKPI(orgId, asOf);
+    const agingData = await getAgingBuckets(orgId, asOf);
+    const collectionsVsCreditsData = await getCollectionsVsCredits(orgId, asOf);
+    const topDelinquentsData = await getTopDelinquents(orgId, asOf);
+    const clientDistributionData = await getClientDistribution(orgId);
+
+    const metrics = {
+      as_of: asOf,
+      range: "6m",
+      currency: "USD",
+      timezone: "America/Caracas",
+      generated_at: new Date().toISOString(),
+
+      kpis: {
+        credit_notes_this_month: creditNotesThisMonthKPI,
+        collected_this_month: collectedThisMonthKPI,
+        delinquent_clients: delinquentClientsKPI,
+        credit_utilization: creditUtilizationKPI
+      },
+
+      aging: agingData,
+
+      collections_vs_credits: collectionsVsCreditsData,
+
+      delinquency_trend: {
+        granularity: "month",
+        series: [
+          { period: "2026-01", label: "Ene", overdue: 22000 },
+          { period: "2026-02", label: "Feb", overdue: 25000 },
+          { period: "2026-03", label: "Mar", overdue: 31000 },
+          { period: "2026-04", label: "Abr", overdue: 28000 },
+          { period: "2026-05", label: "May", overdue: 35000 },
+          { period: "2026-06", label: "Jun", overdue: 32800 }
+        ]
+      },
+
+      client_distribution: clientDistributionData,
+
+      top_delinquents: topDelinquentsData
+    };
+
+    return respond(200, { data: metrics });
+  } catch (error) {
+    console.error('getDashboardMetrics error:', error);
+    return serverError();
+  }
+};

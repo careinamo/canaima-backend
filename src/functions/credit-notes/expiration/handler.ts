@@ -1,4 +1,5 @@
 import * as repo from './repository';
+import { updateDelinquentClientsMetrics } from '../../shared/delinquent-metrics-trigger';
 
 console.log('Credit Note Expiration Handler initialized');
 
@@ -41,6 +42,15 @@ export async function processCreditNoteExpiration(
     const result = await repo.processCreditNoteExpiration(creditNoteId, orgId, clientId);
 
     console.log(`Credit note ${creditNoteId} processed:`, result);
+
+    // If client was marked as delinquent, update monthly delinquent clients metrics
+    if (result.clientMarkedDelinquent) {
+      try {
+        await updateDelinquentClientsMetrics(orgId);
+      } catch (err) {
+        console.warn('Failed to update delinquent clients metrics:', err);
+      }
+    }
 
     return {
       statusCode: 200,

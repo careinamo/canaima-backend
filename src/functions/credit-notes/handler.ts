@@ -2,6 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import { ValidationError, validateCreateCreditNote, validateUpdateCreditNote } from './validators';
 import * as repo from './repository';
 import { CreditLimitExceededError } from './repository';
+import * as paymentsRepo from '../payments/repository';
 import type { CreditNote, CreditNoteStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 import { publishCrudEvent } from '../shared/crud-trigger';
@@ -176,7 +177,7 @@ export const createCreditNote = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'CREATE', 'credit-note', creditNote.id, undefined, {
+    await logAuditEventSync(event, 'CREATE', 'credit-note', creditNote.id, undefined, creditNote.number, {
       clientId: creditNote.clientId,
       amount: creditNote.amount,
       dueDate: creditNote.dueDate,
@@ -245,7 +246,7 @@ export const updateCreditNote = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'UPDATE', 'credit-note', creditNote.id, undefined, {
+    await logAuditEventSync(event, 'UPDATE', 'credit-note', creditNote.id, undefined, creditNote.number, {
       clientId: creditNote.clientId,
       updatedFields: Object.keys(input),
     });
@@ -279,6 +280,24 @@ export const deleteCreditNote = async (
     const creditNote = await repo.getCreditNoteById(orgId, id);
     if (!creditNote) return clientError(404, 'Credit note not found');
 
+    // Check if credit note has associated payments
+    const { items: associatedPayments } = await paymentsRepo.listPayments({
+      orgId,
+      creditNoteId: id,
+      page: 1,
+      limit: 1,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    if (associatedPayments.length > 0) {
+      return respond(409, {
+        error: 'Cannot delete credit note with associated payments',
+        code: 'HAS_ASSOCIATED_PAYMENTS',
+        message: 'Esta nota de crédito tiene pagos asociados. Debe eliminar los pagos primero antes de eliminar la nota de crédito.',
+      });
+    }
+
     const clientId = (creditNote as any).clientId;
 
     // Delete EventBridge rule for credit note expiration
@@ -305,7 +324,7 @@ export const deleteCreditNote = async (
     );
 
     // Log audit event
-    await logAuditEventSync(event, 'DELETE', 'credit-note', id, undefined, {
+    await logAuditEventSync(event, 'DELETE', 'credit-note', id, undefined, creditNote.number, {
       clientId: creditNote.clientId,
       amount: creditNote.amount,
     });
