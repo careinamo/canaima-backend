@@ -535,7 +535,7 @@ Import multiple clients at once from a CSV file. Maximum of 50 clients per reque
 **Request Body:**
 
 Plain text CSV content with the following format:
-- **Header row required** with column names: `name` is required, optionally: `email`, `phone`, `address`, `active`, `delinquent`, `creditLimit`, `notes`
+- **Header row required** with column names: `name` is required, optionally: `email`, `phone`, `address`, `active`, `delinquent`, `creditLimit`, `accumulatedDebt`, `notes`
 - One client per line
 - Columns separated by commas
 - Maximum 50 data rows (excluding header)
@@ -543,10 +543,10 @@ Plain text CSV content with the following format:
 **CSV Format Example:**
 
 ```csv
-name,email,phone,address,active,delinquent,creditLimit,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
-Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,Referred by Acme
-Global Traders,,789 Pine Rd,false,false,30000,Sin email registrado
+name,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
+Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
+Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,0,Referred by Acme
+Global Traders,,789 Pine Rd,false,false,30000,2500,Sin email registrado
 ```
 
 > **Note:** Email es opcional. En el ejemplo anterior, "Global Traders" se importa sin email.
@@ -670,6 +670,7 @@ When some rows fail validation but others succeed:
 - `active` must be a boolean (defaults to `true` if omitted)
 - `delinquent` must be a boolean (defaults to `false` if omitted)
 - `creditLimit` must be a non-negative number (defaults to 0 if omitted)
+- `accumulatedDebt` is optional, must be a non-negative number (defaults to 0 if omitted). **Important:** `accumulatedDebt` cannot exceed `creditLimit`
 - `phone`, `address`, and `notes` are optional
 
 **Partial Success Handling:**

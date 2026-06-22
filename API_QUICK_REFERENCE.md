@@ -168,8 +168,8 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 **Content-Type:** `text/plain`
 **Max:** 50 filas
 ```csv
-name,email,phone,address,active,delinquent,creditLimit,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,Key account
+name,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
+Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
 ```
 ```json
 // Response 202

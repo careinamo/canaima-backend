@@ -32,6 +32,7 @@ export interface CreateClientInput {
   active: boolean;
   delinquent?: boolean;
   creditLimit: number;
+  accumulatedDebt?: number;
   notes?: string;
 }
 

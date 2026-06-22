@@ -38,12 +38,26 @@ export function validateCreateClient(body: unknown): CreateClientInput {
     throw new ValidationError('creditLimit must be a non-negative number');
   }
 
+  let accumulatedDebt: number | undefined;
+  if (input.accumulatedDebt !== undefined) {
+    const debt = Number(input.accumulatedDebt);
+    if (isNaN(debt) || debt < 0) {
+      throw new ValidationError('accumulatedDebt must be a non-negative number');
+    }
+    // Validate that accumulatedDebt does not exceed creditLimit
+    if (debt > creditLimit) {
+      throw new ValidationError('accumulatedDebt cannot exceed creditLimit');
+    }
+    accumulatedDebt = debt;
+  }
+
   return {
     name: String(input.name).trim(),
     email,
     active,
     delinquent,
     creditLimit,
+    accumulatedDebt,
     phone: input.phone ? String(input.phone).trim() : undefined,
     address: input.address ? String(input.address).trim() : undefined,
     notes: input.notes ? String(input.notes).trim() : undefined,
