@@ -25,7 +25,6 @@
     "@aws-sdk/lib-dynamodb": "^3.1045.0",
     "@types/aws-lambda": "^8.10.147",
     "@types/node": "^24.0.0",
-    "@types/pdfkit": "^0.17.6",
     "@types/uuid": "^10.0.0",
     "esbuild": "^0.25.0",
     "serverless": "^4.0.0",
@@ -42,7 +41,7 @@
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.4.2",
     "jose": "^5.10.0",
-    "pdfkit": "^0.19.1",
+    "pdf-lib": "^1.17.1",
     "svix": "^1.94.0",
     "uuid": "^9.0.1",
     "zod": "^3.25.76"
