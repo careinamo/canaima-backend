@@ -152,10 +152,13 @@ export function parseCsvClients(csvContent: string): CsvParseResult {
   }
 
   const headerLine = lines[0];
-  const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
+  // Parse headers: trim and keep original case (not lowercase)
+  // For case-insensitive matching, we'll normalize to lowercase for validation but use original keys
+  const headersRaw = headerLine.split(',').map(h => h.trim());
+  const headersLower = headersRaw.map(h => h.toLowerCase());
   
   // Validate header - only 'name' is required
-  if (!headers.includes('name')) {
+  if (!headersLower.includes('name')) {
     throw new ValidationError('CSV must include \'name\' column');
   }
 
@@ -174,8 +177,9 @@ export function parseCsvClients(csvContent: string): CsvParseResult {
     const cells = line.split(',').map(cell => cell.trim());
     const row: Record<string, string> = {};
 
-    for (let j = 0; j < headers.length; j++) {
-      row[headers[j]] = cells[j] || '';
+    // Map cells to headers using original header names (preserves camelCase)
+    for (let j = 0; j < headersRaw.length; j++) {
+      row[headersRaw[j]] = cells[j] || '';
     }
 
     try {
