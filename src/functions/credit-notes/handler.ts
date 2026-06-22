@@ -9,7 +9,7 @@ import { publishCrudEvent } from '../shared/crud-trigger';
 import { createCreditNoteExpirationRule, deleteCreditNoteExpirationRule, generateRuleName } from './eventbridge-utils';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { EventBridgeClient, DescribeRuleCommand } from '@aws-sdk/client-eventbridge';
-import { requireOrgAccess } from '../shared/auth';
+import { getAuth, requireOrgAccess } from '../shared/auth';
 import { logAuditEventSync } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
@@ -138,6 +138,7 @@ export const createCreditNote = async (
     // Validate user has access to this organization
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
+    const auth = getAuth(event);
 
     let body: unknown;
     try {
@@ -151,7 +152,7 @@ export const createCreditNote = async (
     const creditNote = await repo.createCreditNote(orgId, input);
 
     // Publish CreditNoteCreated CRUD event
-    publishCrudEvent('CreditNoteCreated', orgId, creditNote.id, creditNote).catch(err =>
+    publishCrudEvent('CreditNoteCreated', orgId, creditNote.id, creditNote, auth.userId).catch(err =>
       console.warn('Failed to publish CreditNoteCreated event:', err)
     );
 
@@ -222,6 +223,7 @@ export const updateCreditNote = async (
     // Validate user has access to this organization
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
+    const auth = getAuth(event);
 
     let body: unknown;
     try {
@@ -236,7 +238,7 @@ export const updateCreditNote = async (
     if (!creditNote) return clientError(404, 'Credit note not found');
 
     // Publish CreditNoteUpdated CRUD event
-    publishCrudEvent('CreditNoteUpdated', orgId, creditNote.id, creditNote).catch(err =>
+    publishCrudEvent('CreditNoteUpdated', orgId, creditNote.id, creditNote, auth.userId).catch(err =>
       console.warn('Failed to publish CreditNoteUpdated event:', err)
     );
 
@@ -275,6 +277,7 @@ export const deleteCreditNote = async (
     // Validate user has access to this organization
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
+    const auth = getAuth(event);
 
     // Get the credit note first to capture clientId for the event
     const creditNote = await repo.getCreditNoteById(orgId, id);
@@ -314,7 +317,7 @@ export const deleteCreditNote = async (
     if (!deleted) return clientError(404, 'Credit note not found');
 
     // Publish CreditNoteDeleted CRUD event with clientId (await to ensure it's sent before response)
-    await publishCrudEvent('CreditNoteDeleted', orgId, id, { clientId, creditNoteData: creditNote }).catch(err =>
+    await publishCrudEvent('CreditNoteDeleted', orgId, id, { clientId, creditNoteData: creditNote }, auth.userId).catch(err =>
       console.warn('Failed to publish CreditNoteDeleted event:', err)
     );
 
