@@ -2,6 +2,7 @@ export interface Client {
   id: string;
   orgId: string;
   name: string;
+  document?: string; // Client document ID (e.g., V20345537, J148536972)
   email?: string;
   phone?: string;
   address?: string;
@@ -26,6 +27,7 @@ export interface ClientRecord extends Client {
 
 export interface CreateClientInput {
   name: string;
+  document?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -38,6 +40,7 @@ export interface CreateClientInput {
 
 export interface UpdateClientInput {
   name?: string;
+  document?: string;
   email?: string;
   phone?: string;
   address?: string;

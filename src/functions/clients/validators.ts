@@ -53,6 +53,7 @@ export function validateCreateClient(body: unknown): CreateClientInput {
 
   return {
     name: String(input.name).trim(),
+    document: input.document ? String(input.document).trim() : undefined,
     email,
     active,
     delinquent,
@@ -120,6 +121,7 @@ export function validateUpdateClient(body: unknown): UpdateClientInput {
     result.accumulatedDebt = debt;
   }
 
+  if ('document' in input) result.document = input.document ? String(input.document).trim() : undefined;
   if ('phone' in input) result.phone = input.phone ? String(input.phone).trim() : undefined;
   if ('address' in input) result.address = input.address ? String(input.address).trim() : undefined;
   if ('notes' in input) result.notes = input.notes ? String(input.notes).trim() : undefined;

@@ -38,7 +38,7 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 ```json
 // Response 200
 {
-  "data": [{ "id": "", "name": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true }],
+  "data": [{ "id": "", "name": "", "document": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true }],
   "pagination": { "page": 1, "limit": 20, "totalPages": 1, "totalCount": 1 }
 }
 ```
@@ -46,21 +46,21 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 #### GET `/clients/{id}` - Obtener cliente
 ```json
 // Response 200
-{ "id": "", "name": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "notes": "", "createdAt": "", "updatedAt": "" }
+{ "id": "", "name": "", "document": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "notes": "", "createdAt": "", "updatedAt": "" }
 ```
 
 #### POST `/clients` - Crear cliente
 ```json
 // Request
-{ "name": "required", "email": "optional", "phone": "", "address": "", "creditLimit": 0, "notes": "" }
+{ "name": "required", "document": "optional", "email": "optional", "phone": "", "address": "", "creditLimit": 0, "notes": "" }
 // Response 201
-{ "id": "", "name": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "createdAt": "", "updatedAt": "" }
+{ "id": "", "name": "", "document": "", "email": "", "creditLimit": 0, "accumulatedDebt": 0, "delinquent": false, "active": true, "createdAt": "", "updatedAt": "" }
 ```
 
 #### PUT `/clients/{id}` - Actualizar cliente
 ```json
 // Request (todos opcionales)
-{ "name": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "active": true, "delinquent": false, "notes": "" }
+{ "name": "", "document": "", "email": "", "phone": "", "address": "", "creditLimit": 0, "active": true, "delinquent": false, "notes": "" }
 // Response 200: mismo formato que GET
 ```
 
@@ -168,14 +168,14 @@ Todos los endpoints están bajo `/orgs/{orgId}/...`
 **Content-Type:** `text/plain`
 **Max:** 50 filas
 ```csv
-name,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
+name,document,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
+Acme Corp,J123456789,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
 ```
 ```json
 // Response 202
 {
   "summary": { "total": 2, "successful": 2, "failed": 0 },
-  "created": [{ "id": "", "name": "", "email": "" }],
+  "created": [{ "id": "", "name": "", "document": "", "email": "" }],
   "errors": []
 }
 // Con errores parciales
@@ -534,6 +534,7 @@ erDiagram
     CLIENT {
         string id PK
         string name
+        string document
         string email UK
         number creditLimit
         number accumulatedDebt

@@ -352,6 +352,7 @@ Create a new client account within an organization.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | ✓ | Client name |
+| `document` | string | - | Client document ID (e.g., V20345537, J148536972) |
 | `email` | string | - | Client email (optional, must be unique if provided) |
 | `phone` | string | - | Phone number |
 | `address` | string | - | Physical address |
@@ -420,6 +421,7 @@ Update one or more fields of an existing client.
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Client name |
+| `document` | string | Client document ID (e.g., V20345537, J148536972) |
 | `email` | string | Client email (must remain unique) |
 | `phone` | string | Phone number |
 | `address` | string | Physical address |
@@ -535,7 +537,7 @@ Import multiple clients at once from a CSV file. Maximum of 50 clients per reque
 **Request Body:**
 
 Plain text CSV content with the following format:
-- **Header row required** with column names: `name` is required, optionally: `email`, `phone`, `address`, `active`, `delinquent`, `creditLimit`, `accumulatedDebt`, `notes`
+- **Header row required** with column names: `name` is required, optionally: `document`, `email`, `phone`, `address`, `active`, `delinquent`, `creditLimit`, `accumulatedDebt`, `notes`
 - One client per line
 - Columns separated by commas
 - Maximum 50 data rows (excluding header)
@@ -543,10 +545,10 @@ Plain text CSV content with the following format:
 **CSV Format Example:**
 
 ```csv
-name,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
-Acme Corp,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
-Tech Solutions,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,0,Referred by Acme
-Global Traders,,789 Pine Rd,false,false,30000,2500,Sin email registrado
+name,document,email,phone,address,active,delinquent,creditLimit,accumulatedDebt,notes
+Acme Corp,J123456789,contact@acme.com,+1-555-0100,123 Main St,true,false,50000,5000,Key account
+Tech Solutions,V20345537,info@techsol.com,+1-555-0101,456 Oak Ave,true,false,75000,0,Referred by Acme
+Global Traders,J148536972,,789 Pine Rd,false,false,30000,2500,Sin email registrado
 ```
 
 > **Note:** Email es opcional. En el ejemplo anterior, "Global Traders" se importa sin email.
