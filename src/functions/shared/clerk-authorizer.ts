@@ -6,9 +6,6 @@ let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null;
 let jwksCacheTime = 0;
 const JWKS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-// Check if running in local/offline mode
-const isOffline = process.env.IS_OFFLINE === 'true' || process.env.IS_LOCAL === 'true';
-
 interface ClerkJWTPayload extends JWTPayload {
   sub: string;           // Clerk User ID
   azp?: string;          // Authorized party (your frontend URL)
@@ -58,31 +55,30 @@ function getJWKS(): ReturnType<typeof createRemoteJWKSet> {
  * - X-Dev-Org-Role: role to simulate (admin, member)
  */
 function handleLocalBypass(event: APIGatewayRequestAuthorizerEventV2): APIGatewaySimpleAuthorizerWithContextResult<AuthContext> | null {
-  if (!isOffline) {
+  // Check IS_OFFLINE at runtime, not module load time
+  const isOfflineMode = process.env.IS_OFFLINE === 'true' || process.env.IS_LOCAL === 'true';
+  
+  console.log('[AUTH] isOfflineMode:', isOfflineMode, 'IS_OFFLINE:', process.env.IS_OFFLINE, 'IS_LOCAL:', process.env.IS_LOCAL);
+  
+  if (!isOfflineMode) {
     return null;
   }
 
-  const devUserId = event.headers?.['x-dev-user-id'];
-  const devOrgId = event.headers?.['x-dev-org-id'];
-  const devOrgRole = event.headers?.['x-dev-org-role'];
-
-  // If no auth header and no dev headers, use default dev user
-  const authHeader = event.headers?.authorization || event.headers?.Authorization;
-  
-  if (!authHeader && !devUserId) {
-    console.log('[DEV MODE] No auth - using default dev user');
-    return {
-      isAuthorized: true,
-      context: {
-        userId: 'dev_user_local',
-        orgId: 'org-default',
-        orgRole: 'admin',
-        orgSlug: null,
-      },
-    };
+  // Normalize headers to lowercase for comparison
+  const headers = event.headers || {};
+  const normalizedHeaders: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value) normalizedHeaders[key.toLowerCase()] = value;
   }
 
-  // If dev headers are provided, use them
+  const devUserId = normalizedHeaders['x-dev-user-id'];
+  const devOrgId = normalizedHeaders['x-dev-org-id'];
+  const devOrgRole = normalizedHeaders['x-dev-org-role'];
+  const authHeader = normalizedHeaders['authorization'];
+
+  console.log('[DEV MODE] Headers:', { devUserId, devOrgId, authHeader: authHeader ? 'present' : 'none' });
+
+  // If dev headers are provided, use them (takes priority over auth header)
   if (devUserId) {
     console.log('[DEV MODE] Using dev headers - userId:', devUserId, 'orgId:', devOrgId);
     return {
@@ -96,7 +92,21 @@ function handleLocalBypass(event: APIGatewayRequestAuthorizerEventV2): APIGatewa
     };
   }
 
-  // Has auth header, continue with normal validation
+  // If no auth header and no dev headers, use default dev user
+  if (!authHeader) {
+    console.log('[DEV MODE] No auth - using default dev user');
+    return {
+      isAuthorized: true,
+      context: {
+        userId: 'dev_user_local',
+        orgId: 'org-default',
+        orgRole: 'admin',
+        orgSlug: null,
+      },
+    };
+  }
+
+  // Has auth header but no dev headers, continue with normal validation
   return null;
 }
 

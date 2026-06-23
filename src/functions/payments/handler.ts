@@ -5,7 +5,7 @@ import * as creditNotesRepo from '../credit-notes/repository';
 import type { PaymentMethod, PaymentStatus } from './types';
 import { triggerCreditUsageCalculation } from '../shared/credit-usage-trigger';
 import { publishCrudEvent } from '../shared/crud-trigger';
-import { requireOrgAccess } from '../shared/auth';
+import { getAuth, requireOrgAccess } from '../shared/auth';
 import { logAuditEventSync } from '../shared/audit-logger';
 
 // ---------------------------------------------------------------------------
@@ -134,6 +134,7 @@ export const createPayment = async (
     // Validate user has access to this organization
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
+    const auth = getAuth(event);
 
     let body: unknown;
     try {
@@ -147,7 +148,7 @@ export const createPayment = async (
     const payment = await repo.createPayment(orgId, input);
     
     // Publish PaymentCreated CRUD event
-    publishCrudEvent('PaymentCreated', orgId, payment.id, payment).catch(err =>
+    publishCrudEvent('PaymentCreated', orgId, payment.id, payment, auth.userId).catch(err =>
       console.warn('Failed to publish PaymentCreated event:', err)
     );
 
@@ -158,7 +159,7 @@ export const createPayment = async (
           publishCrudEvent('CreditNotePaid', orgId, input.creditNoteId, {
             clientId: input.clientId,
             creditNoteId: input.creditNoteId,
-          }).catch(err =>
+          }, auth.userId).catch(err =>
             console.warn('Failed to publish CreditNotePaid event:', err)
           );
         }
@@ -215,6 +216,7 @@ export const updatePayment = async (
     // Validate user has access to this organization
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
+    const auth = getAuth(event);
 
     let body: unknown;
     try {
@@ -229,7 +231,7 @@ export const updatePayment = async (
     if (!payment) return clientError(404, 'Payment not found');
 
     // Publish PaymentUpdated CRUD event
-    publishCrudEvent('PaymentUpdated', orgId, payment.id, payment).catch(err =>
+    publishCrudEvent('PaymentUpdated', orgId, payment.id, payment, auth.userId).catch(err =>
       console.warn('Failed to publish PaymentUpdated event:', err)
     );
 
@@ -269,6 +271,7 @@ export const deletePayment = async (
     // Validate user has access to this organization
     const accessDenied = requireOrgAccess(event, orgId);
     if (accessDenied) return accessDenied;
+    const auth = getAuth(event);
 
     // Get payment before deleting (to have clientId for delinquency check)
     const payment = await repo.getPaymentById(orgId, id);
@@ -282,7 +285,7 @@ export const deletePayment = async (
       clientId: payment.clientId,
       creditNoteId: payment.creditNoteId,
       amount: payment.amount,
-    }).catch(err =>
+    }, auth.userId).catch(err =>
       console.warn('Failed to publish PaymentDeleted event:', err)
     );
 
